@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js", // Your main server file
+      "use": "@vercel/node",
+      "config": {
+        "zeroConfig": true
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)", // This matches all routes (except for API routes)
+      "dest": "index.html" // Serve your index.html for all routes not handled by the backend
+    }
+  ]
+}
