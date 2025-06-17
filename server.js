@@ -4,56 +4,148 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { v4: uuidv4 } = require('uuid'); // For unique IDs
-require('dotenv').config(); //Load environment variables from .env file
+const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt'); // Import bcrypt
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Use environment variable or default to 3000
+const PORT = process.env.PORT || 3000;
 
-// ... (rest of your middleware and file handling code remains the same) ...
+// --- Middleware ---
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// --- Admin Authentication (Using environment variable) ---
-const ADMIN_USERNAME = 'shakiso';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; // Get password from environment variable
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Middleware to protect admin routes
-const authenticateAdmin = (req, res, next) => {
-    // In a production app, replace this with robust session/JWT handling. For now, it is ok.
-    const { token } = req.headers;
-    if (token === process.env.ADMIN_TOKEN) { //Validate simple token
+// --- Data File Paths ---
+const ANNOUNCEMENTS_FILE = path.join(__dirname, 'data', 'announcements.json');
+const MEDIA_FILE = path.join(__dirname, 'data', 'media.json');
+const ADMIN_DATA_FILE = path.join(__dirname, 'data', 'admin.json');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+
+// Ensure directories exist (with error handling)
+fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+
+// --- Multer ---
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => { cb(null, UPLOADS_DIR); },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const fileExtension = path.extname(file.originalname);
+        cb(null, file.fieldname + '-' + uniqueSuffix + fileExtension);
+    }
+});
+const upload = multer({ storage: storage });
+
+// --- JSON Helper Functions ---
+const readJsonFile = (filePath) => {
+    try {
+        if (!fs.existsSync(filePath)) { return []; }
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.error(`Error reading ${filePath}:`, error.message);
+        return [];
+    }
+};
+
+const writeJsonFile = (filePath, data) => {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+        console.error(`Error writing to ${filePath}:`, error.message);
+    }
+};
+
+
+// --- Admin Authentication (with bcrypt) ---
+const authenticateAdmin = async (req, res, next) => {
+    try {
+        const adminData = readJsonFile(ADMIN_DATA_FILE);
+        //If adminData is an empty array or null, it will return the error message
+        if (!adminData || Object.keys(adminData).length === 0) {
+            return res.status(500).json({ message: "Admin data not found!" });
+        }
+
+        const { username, password } = req.body;
+       
+        //Since it's not an array, you can directly compare usernames
+        if (adminData.username !== username) {
+            return res.status(401).json({ message: 'Invalid username' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, adminData.passwordHash);
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid password' });
+        }
         next();
-    } else {
-        res.status(401).json({ message: 'Unauthorized: Admin login required.' });
+    } catch (error) {
+        console.error("Authentication error:", error);
+        return res.status(500).json({ message: 'Authentication failed' });
     }
 };
 
 // --- API Endpoints ---
 
 // Admin Login
-app.post('/api/admin/login', (req, res) => {
-    const { username, password } = req.body;
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        //Instead of setting a flag, generate a simple token for security.
-        const token = uuidv4(); //Generate unique token
-        res.json({ success: true, message: 'Login successful!', token }); 
-    } else {
-        res.status(401).json({ success: false, message: 'Invalid credentials.' });
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        await authenticateAdmin(req, res, () => {
+            const token = uuidv4();
+            res.json({ success: true, message: 'Login successful!', token });
+        });
+    } catch (error) {
+        console.error("Login Error:", error);
+        res.status(500).json({ success: false, message: 'Login failed' });
     }
 });
 
-// Admin Logout
-app.post('/api/admin/logout', (req, res) => {
-    res.json({ success: true, message: 'Logged out successfully.' }); //No need to change anything in backend
+
+// Admin Routes (Protected) --- Add your admin routes here (protected by authenticateAdmin middleware)
+app.post('/api/admin/announcements', upload.single('announcementImage'), authenticateAdmin, async (req, res) => {
+    try {
+        let announcements = readJsonFile(ANNOUNCEMENTS_FILE);
+        const newAnnouncement = {
+            id: uuidv4(),
+            title: req.body.title,
+            content: req.body.content,
+            image: req.file ? req.file.filename : null, // Handle cases where no image is uploaded
+            date: new Date().toISOString()
+        };
+        announcements.push(newAnnouncement);
+        writeJsonFile(ANNOUNCEMENTS_FILE, announcements);
+        res.json({ message: 'Announcement posted successfully!', announcement: newAnnouncement });
+    } catch (error) {
+        console.error('Error posting announcement:', error);
+        res.status(500).json({ message: 'Error posting announcement' });
+    }
 });
 
-// Check Admin Status (Frontend can use this to determine if admin panel should be shown)
-app.get('/api/admin/status', authenticateAdmin, (req, res) => { //Protected route
-    res.json({ loggedIn: true });
+
+app.post('/api/admin/media', upload.single('mediaFile'), authenticateAdmin, async (req, res) => {
+    try {
+        let media = readJsonFile(MEDIA_FILE);
+        const newMedia = {
+            id: uuidv4(),
+            title: req.body.title,
+            file: req.file.filename,
+            date: new Date().toISOString()
+        };
+        media.push(newMedia);
+        writeJsonFile(MEDIA_FILE, media);
+        res.json({ message: 'Media uploaded successfully!', media: newMedia });
+    } catch (error) {
+        console.error('Error uploading media:', error);
+        res.status(500).json({ message: 'Error uploading media' });
+    }
 });
 
-// ... (rest of your API endpoints, protected with authenticateAdmin where needed) ...
 
-// Start the server
 app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
 });
