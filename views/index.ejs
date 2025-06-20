@@ -1,0 +1,166 @@
+<%- include('includes/header') %>
+
+<section class="hero">
+    <h2>Welcome to Shakiso Poly-Technic College</h2>
+    <p>Empowering the next generation with technical skills and practical knowledge.</p>
+    <a href="/about" class="btn">Learn More</a>
+</section>
+
+<section class="announcements-section">
+    <h2 class="section-title">Latest Announcements</h2>
+    <div class="grid">
+        <% if (announcements.length > 0) { %>
+            <% announcements.forEach(announcement => { %>
+                <%- include('partials/announcement-card', { announcement }) %>
+            <% }) %>
+        <% } else { %>
+            <p class="card" style="grid-column: 1 / -1; text-align: center;">No announcements yet. Check back soon!</p>
+        <% } %>
+    </div>
+</section>
+
+<section class="videos-section">
+    <h2 class="section-title">Featured Videos</h2>
+    <div class="grid">
+        <% if (videos.length > 0) { %>
+            <% videos.forEach(video => { %>
+                <%- include('partials/video-card', { video }) %>
+            <% }) %>
+        <% } else { %>
+            <p class="card" style="grid-column: 1 / -1; text-align: center;">No videos available. Stay tuned!</p>
+        <% } %>
+    </div>
+</section>
+
+<section class="photos-section">
+    <h2 class="section-title">Photo Gallery Highlights</h2>
+    <div class="grid">
+        <% if (photos.length > 0) { %>
+            <% photos.forEach(photo => { %>
+                <%- include('partials/photo-card', { photo }) %>
+            <% }) %>
+        <% } else { %>
+            <p class="card" style="grid-column: 1 / -1; text-align: center;">No photos uploaded yet. Come back later!</p>
+        <% } %>
+    </div>
+</section>
+
+<%- include('includes/footer') %>
+```
+
+**`views/about.ejs` (About Page)**
+
+```ejs
+<%- include('includes/header') %>
+
+<section class="page-content">
+    <h2 class="section-title">About Shakiso Poly-Technic College</h2>
+    <p>Shakiso Poly-Technic College is a distinguished governmental institution dedicated to providing high-quality technical and vocational education. Located in the vibrant Shakiso City Administration, our college plays a crucial role in empowering the youth with practical skills and knowledge essential for national development.</p>
+    <p>Established with a vision to bridge the gap between academic learning and industry demands, we offer a diverse range of programs designed to equip students with the competencies needed to thrive in various sectors. Our curriculum is developed in close collaboration with industry experts to ensure its relevance and effectiveness.</p>
+    <h3>Our Vision</h3>
+    <p>To be a leading center of excellence in technical and vocational education, fostering innovation, entrepreneurship, and sustainable development in Ethiopia and beyond.</p>
+    <h3>Our Mission</h3>
+    <p>To provide accessible, quality-driven, and industry-relevant technical and vocational training that empowers students to achieve their full potential, contribute to the economy, and lead fulfilling lives.</p>
+    <h3>Core Values</h3>
+    <ul>
+        <li>**Excellence:** Striving for the highest standards in education and training.</li>
+        <li>**Innovation:** Embracing new ideas and technologies to enhance learning.</li>
+        <li>**Integrity:** Upholding honesty, ethics, and transparency in all our operations.</li>
+        <li>**Community Engagement:** Actively participating in community development initiatives.</li>
+        <li>**Student Success:** Committing to the holistic development and career success of our students.</li>
+    </ul>
+    <p>Our state-of-the-art facilities, experienced faculty, and strong industry linkages ensure that our graduates are well-prepared to meet the challenges of the modern workforce. We are proud to contribute to the economic growth and social progress of our region.</p>
+</section>
+
+<%- include('includes/footer') %>
+```
+
+**`views/contact.ejs` (Contact Page)**
+
+```ejs
+<%- include('includes/header') %>
+
+<section class="page-content">
+    <h2 class="section-title">Contact Shakiso Poly-Technic College</h2>
+    <p>We are always happy to hear from prospective students, partners, and the community. Please feel free to reach out to us using the information below or by filling out the contact form.</p>
+
+    <div class="contact-info">
+        <h3>Our Location</h3>
+        <p>Shakiso Poly-Technic College<br>
+        [Insert Street Address, e.g., Main Road, Near City Center]<br>
+        Shakiso City Administration, Ethiopia</p>
+
+        <h3>Contact Details</h3>
+        <ul>
+            <li><strong>Phone:</strong> [+251-XXX-XXX-XXXX] (Main Office)</li>
+            <li><strong>Email:</strong> [info@shakisopoly.edu.et]</li>
+            <li><strong>Admissions:</strong> [admissions@shakisopoly.edu.et]</li>
+        </ul>
+
+        <h3>Office Hours</h3>
+        <p>Monday - Friday: 8:00 AM - 5:00 PM (EAT)<br>
+        Saturday: 9:00 AM - 1:00 PM (EAT)<br>
+        Sunday: Closed</p>
+    </div>
+
+    <!-- Contact Form (Frontend only - no backend processing for this example, requires email service) -->
+    <h3>Send us a Message</h3>
+    <form action="#" method="POST" class="contact-form">
+        <div class="form-group">
+            <label for="name">Your Name:</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Your Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+            <label for="subject">Subject:</label>
+            <input type="text" id="subject" name="subject" required>
+        </div>
+        <div class="form-group">
+            <label for="message">Your Message:</label>
+            <textarea id="message" name="message" required></textarea>
+        </div>
+        <button type="submit">Send Message</button>
+        <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+            *Note: This is a placeholder form. For actual email sending, you'd integrate a service like Nodemailer or a third-party API (e.g., SendGrid).
+        </p>
+    </form>
+</section>
+
+<%- include('includes/footer') %>
+```
+
+**`views/admin-login.ejs` (Admin Login Page)**
+
+```ejs
+<%- include('includes/admin-header') %>
+
+<div class="login-container">
+    <h2>Admin Login</h2>
+    <% if (success_msg && success_msg.length > 0) { %>
+        <div class="flash-messages success">
+            <%= success_msg %>
+        </div>
+    <% } %>
+    <% if (error_msg && error_msg.length > 0) { %>
+        <div class="flash-messages error">
+            <%= error_msg %>
+        </div>
+    <% } %>
+    <form action="/admin/login" method="POST">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit" class="btn-submit">Login</button>
+    </form>
+</div>
+
+</body>
+</html>

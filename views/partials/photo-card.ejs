@@ -1,0 +1,20 @@
+<div class="card">
+    <h3><%= photo.title %></h3>
+    <img src="<%= photo.url %>" alt="<%= photo.title %>">
+    <p><%= photo.description %></p>
+    <p><small>Uploaded: <%= photo.uploadedAt.toLocaleDateString() %></small></p>
+</div>
+```
+
+**`views/404.ejs`**
+
+```ejs
+<%- include('includes/header') %>
+
+<section class="page-content" style="text-align: center; padding: 100px 20px;">
+    <h2 style="font-size: 3em; color: #dc3545;">404 - Page Not Found</h2>
+    <p style="font-size: 1.2em; margin-bottom: 30px;">Oops! The page you are looking for does not exist.</p>
+    <a href="/" class="btn">Go to Homepage</a>
+</section>
+
+<%- include('includes/footer') %>

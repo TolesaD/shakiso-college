@@ -1,133 +1,84 @@
+require('dotenv').config(); // Load environment variables from .env file
 const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const fs = require('fs');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const flash = require('connect-flash');
 const path = require('path');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
+const User = require('./models/User'); // Import User model
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+        console.log('MongoDB connected successfully!');
+        // Create default admin user if not exists
+        createDefaultAdmin();
+    })
+    .catch(err => console.error('MongoDB connection error:', err));
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-const ANNOUNCEMENTS_FILE = path.join(__dirname, 'data', 'announcements.json');
-const MEDIA_FILE = path.join(__dirname, 'data', 'media.json');
-const ADMIN_DATA_FILE = path.join(__dirname, 'data', 'admin.json');
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-
-fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => { cb(null, UPLOADS_DIR); },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const fileExtension = path.extname(file.originalname);
-        cb(null, file.fieldname + '-' + uniqueSuffix + fileExtension);
-    }
-});
-const upload = multer({ storage: storage });
-
-const readJsonFile = (filePath) => {
+// Function to create a default admin user
+async function createDefaultAdmin() {
     try {
-        if (!fs.existsSync(filePath)) { return {}; }
-        const data = fs.readFileSync(filePath, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        console.error(`Error reading ${filePath}:`, error.message);
-        return {};
-    }
-};
-
-const writeJsonFile = (filePath, data) => {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-        console.error(`Error writing to ${filePath}:`, error.message);
-    }
-};
-
-const authenticateAdmin = async (req, res, next) => {
-    try {
-        const adminData = readJsonFile(ADMIN_DATA_FILE);
-        if (!adminData || Object.keys(adminData).length === 0) {
-            return res.status(500).json({ message: "Admin data not found!" });
+        const existingAdmin = await User.findOne({ username: process.env.ADMIN_USERNAME });
+        if (!existingAdmin) {
+            const newAdmin = new User({
+                username: process.env.ADMIN_USERNAME,
+                password: process.env.ADMIN_PASSWORD, // Password will be hashed by pre-save hook
+                role: 'admin'
+            });
+            await newAdmin.save();
+            console.log(`Default admin user '${process.env.ADMIN_USERNAME}' created.`);
+            console.warn('NOTE: Please change the default admin password immediately after first login!');
         }
-
-        const { username, password } = req.body;
-
-        if (adminData.username !== username) {
-            return res.status(401).json({ message: 'Invalid username' });
-        }
-
-        const passwordMatch = await bcrypt.compare(password, adminData.passwordHash);
-        if (!passwordMatch) {
-            return res.status(401).json({ message: 'Invalid password' });
-        }
-        next();
-    } catch (error) {
-        console.error("Authentication error:", error);
-        return res.status(500).json({ message: 'Authentication failed' });
+    } catch (err) {
+        console.error('Error creating default admin user:', err);
     }
-};
+}
 
-app.post('/api/admin/login', async (req, res) => {
-    try {
-        await authenticateAdmin(req, res, () => {
-            const token = uuidv4();
-            res.json({ success: true, message: 'Login successful!', token });
-        });
-    } catch (error) {
-        console.error("Login Error:", error);
-        res.status(500).json({ success: false, message: 'Login failed' });
-    }
+// Middleware
+app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies (for form data)
+app.use(express.json()); // Parse JSON bodies
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public' directory
+
+// Session middleware
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+}));
+
+// Flash messages middleware
+app.use(flash());
+
+// Set EJS as the templating engine
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Global variables for templates (e.g., flash messages)
+app.use((req, res, next) => {
+    res.locals.success_msg = req.flash('success');
+    res.locals.error_msg = req.flash('error');
+    res.locals.isAuthenticated = req.session.userId ? true : false;
+    next();
 });
 
-app.post('/api/admin/announcements', upload.single('announcementImage'), authenticateAdmin, async (req, res) => {
-    try {
-        let announcements = Array.isArray(readJsonFile(ANNOUNCEMENTS_FILE)) ? readJsonFile(ANNOUNCEMENTS_FILE) : [];
-        const newAnnouncement = {
-            id: uuidv4(),
-            title: req.body.title,
-            content: req.body.content,
-            image: req.file ? req.file.filename : null,
-            date: new Date().toISOString()
-        };
-        announcements.push(newAnnouncement);
-        writeJsonFile(ANNOUNCEMENTS_FILE, announcements);
-        res.json({ message: 'Announcement posted successfully!', announcement: newAnnouncement });
-    } catch (error) {
-        console.error('Error posting announcement:', error);
-        res.status(500).json({ message: 'Error posting announcement' });
-    }
+// Import Routes
+const publicRoutes = require('./routes/publicRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
+// Use Routes
+app.use('/', publicRoutes); // Public facing routes
+app.use('/admin', adminRoutes); // Admin routes (protected)
+
+// Handle 404 - Not Found
+app.use((req, res, next) => {
+    res.status(404).render('404', { title: 'Page Not Found' }); // Create a 404.ejs later
 });
 
-app.post('/api/admin/media', upload.single('mediaFile'), authenticateAdmin, async (req, res) => {
-    try {
-        let media = Array.isArray(readJsonFile(MEDIA_FILE)) ? readJsonFile(MEDIA_FILE) : [];
-        const newMedia = {
-            id: uuidv4(),
-            title: req.body.title,
-            file: req.file.filename,
-            date: new Date().toISOString()
-        };
-        media.push(newMedia);
-        writeJsonFile(MEDIA_FILE, media);
-        res.json({ message: 'Media uploaded successfully!', media: newMedia });
-    } catch (error) {
-        console.error('Error uploading media:', error);
-        res.status(500).json({ message: 'Error uploading media' });
-    }
-});
-
+// Start the server
 app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
 });

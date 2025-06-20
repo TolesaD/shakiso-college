@@ -1,1 +1,5 @@
-    .env
+node_modules/
+.env
+uploads/ # If you were storing files locally (Cloudinary avoids this)
+npm-debug.log
+.DS_Store
