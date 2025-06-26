@@ -25,7 +25,8 @@
     "express-session": "^1.17.3",
     "method-override": "^3.0.0",
     "mongoose": "^7.0.0",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "router": "^2.2.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"

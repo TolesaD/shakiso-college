@@ -117,25 +117,6 @@
                 </div>
             </form>
         </div>
-        <!-- Add these form groups below your existing content field -->
-<div class="form-group">
-    <label for="mediaTitle">Media Title</label>
-    <input type="text" id="mediaTitle" name="mediaTitle" class="form-control" 
-           value="<%= announcement && announcement.media ? announcement.media.title : '' %>">
-</div>
-
-<div class="form-group">
-    <label for="mediaDescription">Media Description</label>
-    <textarea id="mediaDescription" name="mediaDescription" class="form-control" rows="3">
-        <%= announcement && announcement.media ? announcement.media.description : '' %>
-    </textarea>
-</div>
-
-<div class="form-group">
-    <label for="mediaUrl">Media URL (YouTube, Image, etc.)</label>
-    <input type="text" id="mediaUrl" name="mediaUrl" class="form-control" 
-           value="<%= announcement && announcement.media ? announcement.media.url : '' %>">
-</div>
     </main>
 
     <%- include('../partials/footer') %>
