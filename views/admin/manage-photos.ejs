@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('../partials/head', {title: 'Manage Photos'}) %>
+</head>
+<body>
+    <header class="admin-header">
+        <div class="container">
+            <nav class="admin-nav">
+                <a href="/admin/dashboard" class="logo">Admin <span>Dashboard</span></a>
+                <ul class="admin-nav-links">
+                    <li><a href="/admin/dashboard">Dashboard</a></li>
+                    <li><a href="/admin/announcements">Announcements</a></li>
+                    <li><a href="/admin/photos">Photos</a></li>
+                    <li><a href="/admin/videos">Videos</a></li>
+                    <li><a href="/admin/logout">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="container">
+            <h1>Manage Photos</h1>
+            
+            <div class="card">
+                <h2>Upload New Photo</h2>
+                <form action="/admin/photos" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="title" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <textarea id="description" name="description" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="photo">Photo</label>
+                        <input type="file" id="photo" name="photo" class="form-control" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn">Upload Photo</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Photo Gallery</h2>
+                <div class="gallery">
+                    <% photos.forEach(photo => { %>
+                        <div class="gallery-item">
+                            <img src="<%= photo.imagePath %>" alt="<%= photo.title %>">
+                            <div class="overlay">
+                                <h3><%= photo.title %></h3>
+                                <% if (photo.description) { %>
+                                    <p><%= photo.description %></p>
+                                <% } %>
+                                <form action="/admin/photos/<%= photo._id %>/delete" method="POST">
+                                    <button type="submit" class="btn btn-small">Delete</button>
+                                </form>
+                            </div>
+                            <!-- For each photo item -->
+<div class="actions">
+    <a href="/admin/photos/<%= photo._id %>/edit" class="btn btn-sm btn-primary">Edit</a>
+    <form action="/admin/photos/<%= photo._id %>/delete" method="POST" style="display: inline;">
+        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+    </form>
+</div>
+                        </div>
+                    <% }) %>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <%- include('../partials/footer') %>
+</body>
+</html>

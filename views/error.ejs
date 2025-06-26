@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Shakiso Poly-Technic</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav class="navbar">
+                <a href="/" class="logo">Shakiso <span>Poly-Technic</span></a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="error-container">
+            <h1>Error</h1>
+            <p class="error-message"><%= message %></p>
+            
+            <% if (error && Object.keys(error).length > 0) { %>
+                <div class="error-details">
+                    <h3>Error Details:</h3>
+                    <pre><%= JSON.stringify(error, null, 2) %></pre>
+                </div>
+            <% } %>
+            
+            <a href="/" class="btn">Return to Homepage</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; <%= new Date().getFullYear() %> Shakiso Poly-Technic College</p>
+        </div>
+    </footer>
+</body>
+</html>

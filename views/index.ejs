@@ -1,166 +1,162 @@
-<%- include('includes/header') %>
-
-<section class="hero">
-    <h2>Welcome to Shakiso Poly-Technic College</h2>
-    <p>Empowering the next generation with technical skills and practical knowledge.</p>
-    <a href="/about" class="btn">Learn More</a>
-</section>
-
-<section class="announcements-section">
-    <h2 class="section-title">Latest Announcements</h2>
-    <div class="grid">
-        <% if (announcements.length > 0) { %>
-            <% announcements.forEach(announcement => { %>
-                <%- include('partials/announcement-card', { announcement }) %>
-            <% }) %>
-        <% } else { %>
-            <p class="card" style="grid-column: 1 / -1; text-align: center;">No announcements yet. Check back soon!</p>
-        <% } %>
-    </div>
-</section>
-
-<section class="videos-section">
-    <h2 class="section-title">Featured Videos</h2>
-    <div class="grid">
-        <% if (videos.length > 0) { %>
-            <% videos.forEach(video => { %>
-                <%- include('partials/video-card', { video }) %>
-            <% }) %>
-        <% } else { %>
-            <p class="card" style="grid-column: 1 / -1; text-align: center;">No videos available. Stay tuned!</p>
-        <% } %>
-    </div>
-</section>
-
-<section class="photos-section">
-    <h2 class="section-title">Photo Gallery Highlights</h2>
-    <div class="grid">
-        <% if (photos.length > 0) { %>
-            <% photos.forEach(photo => { %>
-                <%- include('partials/photo-card', { photo }) %>
-            <% }) %>
-        <% } else { %>
-            <p class="card" style="grid-column: 1 / -1; text-align: center;">No photos uploaded yet. Come back later!</p>
-        <% } %>
-    </div>
-</section>
-
-<%- include('includes/footer') %>
-```
-
-**`views/about.ejs` (About Page)**
-
-```ejs
-<%- include('includes/header') %>
-
-<section class="page-content">
-    <h2 class="section-title">About Shakiso Poly-Technic College</h2>
-    <p>Shakiso Poly-Technic College is a distinguished governmental institution dedicated to providing high-quality technical and vocational education. Located in the vibrant Shakiso City Administration, our college plays a crucial role in empowering the youth with practical skills and knowledge essential for national development.</p>
-    <p>Established with a vision to bridge the gap between academic learning and industry demands, we offer a diverse range of programs designed to equip students with the competencies needed to thrive in various sectors. Our curriculum is developed in close collaboration with industry experts to ensure its relevance and effectiveness.</p>
-    <h3>Our Vision</h3>
-    <p>To be a leading center of excellence in technical and vocational education, fostering innovation, entrepreneurship, and sustainable development in Ethiopia and beyond.</p>
-    <h3>Our Mission</h3>
-    <p>To provide accessible, quality-driven, and industry-relevant technical and vocational training that empowers students to achieve their full potential, contribute to the economy, and lead fulfilling lives.</p>
-    <h3>Core Values</h3>
-    <ul>
-        <li>**Excellence:** Striving for the highest standards in education and training.</li>
-        <li>**Innovation:** Embracing new ideas and technologies to enhance learning.</li>
-        <li>**Integrity:** Upholding honesty, ethics, and transparency in all our operations.</li>
-        <li>**Community Engagement:** Actively participating in community development initiatives.</li>
-        <li>**Student Success:** Committing to the holistic development and career success of our students.</li>
-    </ul>
-    <p>Our state-of-the-art facilities, experienced faculty, and strong industry linkages ensure that our graduates are well-prepared to meet the challenges of the modern workforce. We are proud to contribute to the economic growth and social progress of our region.</p>
-</section>
-
-<%- include('includes/footer') %>
-```
-
-**`views/contact.ejs` (Contact Page)**
-
-```ejs
-<%- include('includes/header') %>
-
-<section class="page-content">
-    <h2 class="section-title">Contact Shakiso Poly-Technic College</h2>
-    <p>We are always happy to hear from prospective students, partners, and the community. Please feel free to reach out to us using the information below or by filling out the contact form.</p>
-
-    <div class="contact-info">
-        <h3>Our Location</h3>
-        <p>Shakiso Poly-Technic College<br>
-        [Insert Street Address, e.g., Main Road, Near City Center]<br>
-        Shakiso City Administration, Ethiopia</p>
-
-        <h3>Contact Details</h3>
-        <ul>
-            <li><strong>Phone:</strong> [+251-XXX-XXX-XXXX] (Main Office)</li>
-            <li><strong>Email:</strong> [info@shakisopoly.edu.et]</li>
-            <li><strong>Admissions:</strong> [admissions@shakisopoly.edu.et]</li>
-        </ul>
-
-        <h3>Office Hours</h3>
-        <p>Monday - Friday: 8:00 AM - 5:00 PM (EAT)<br>
-        Saturday: 9:00 AM - 1:00 PM (EAT)<br>
-        Sunday: Closed</p>
-    </div>
-
-    <!-- Contact Form (Frontend only - no backend processing for this example, requires email service) -->
-    <h3>Send us a Message</h3>
-    <form action="#" method="POST" class="contact-form">
-        <div class="form-group">
-            <label for="name">Your Name:</label>
-            <input type="text" id="name" name="name" required>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('partials/head', {title: 'Home'}) %>
+    <style>
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        .video-card {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .video-card:hover {
+            transform: translateY(-5px);
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+        }
+        .video-container iframe,
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .video-info {
+            padding: 1.5rem;
+        }
+        .video-info h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <%- include('partials/header', {user}) %>
+    
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Welcome to Shakiso Poly-Technic College</h1>
+                <p>Empowering the future through quality technical and vocational education.</p>
+                <a href="/about" class="btn">Learn More</a>
+                <a href="/contact" class="btn btn-outline">Contact Us</a>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="email">Your Email:</label>
-            <input type="email" id="email" name="email" required>
-        </div>
-        <div class="form-group">
-            <label for="subject">Subject:</label>
-            <input type="text" id="subject" name="subject" required>
-        </div>
-        <div class="form-group">
-            <label for="message">Your Message:</label>
-            <textarea id="message" name="message" required></textarea>
-        </div>
-        <button type="submit">Send Message</button>
-        <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
-            *Note: This is a placeholder form. For actual email sending, you'd integrate a service like Nodemailer or a third-party API (e.g., SendGrid).
-        </p>
-    </form>
-</section>
+    </section>
 
-<%- include('includes/footer') %>
-```
-
-**`views/admin-login.ejs` (Admin Login Page)**
-
-```ejs
-<%- include('includes/admin-header') %>
-
-<div class="login-container">
-    <h2>Admin Login</h2>
-    <% if (success_msg && success_msg.length > 0) { %>
-        <div class="flash-messages success">
-            <%= success_msg %>
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">College Highlights</h2>
+            <div class="highlights">
+                <div class="highlight-card">
+                    <i class="fas fa-graduation-cap"></i>
+                    <h3>Quality Education</h3>
+                    <p>We provide hands-on training and quality education to prepare trainees for the workforce.</p>
+                </div>
+                <div class="highlight-card">
+                    <i class="fas fa-flask"></i>
+                    <h3>Modern Labs</h3>
+                    <p>State-of-the-art laboratory equipped with the latest technology for practical learning.</p>
+                </div>
+                <div class="highlight-card">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                    <h3>Expert Faculty</h3>
+                    <p>Our experienced instructors are dedicated to trainees success and professional development.</p>
+                </div>
+            </div>
         </div>
-    <% } %>
-    <% if (error_msg && error_msg.length > 0) { %>
-        <div class="flash-messages error">
-            <%= error_msg %>
-        </div>
-    <% } %>
-    <form action="/admin/login" method="POST">
-        <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        <button type="submit" class="btn-submit">Login</button>
-    </form>
-</div>
+    </section>
 
+    <section class="section bg-light">
+        <div class="container">
+            <h2 class="section-title">Latest Announcements</h2>
+            <div class="announcements">
+                <% if (announcements.length > 0) { %>
+                    <% announcements.forEach(announcement => { %>
+                        <div class="announcement-item">
+                            <h3><%= announcement.title %></h3>
+                            <p><%= announcement.content %></p>
+                            <span class="date"><%= announcement.createdAt.toLocaleDateString() %></span>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No announcements available.</p>
+                <% } %>
+            </div>
+            <a href="/about" class="btn">View All Announcements</a>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">Photo Gallery</h2>
+            <div class="gallery">
+                <% if (photos.length > 0) { %>
+                    <% photos.forEach(photo => { %>
+                        <div class="gallery-item">
+                            <img src="<%= photo.imagePath %>" alt="<%= photo.title %>">
+                            <div class="overlay">
+                                <h3><%= photo.title %></h3>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No photos available.</p>
+                <% } %>
+            </div>
+            <a href="/gallery" class="btn">View Full Gallery</a>
+        </div>
+    </section>
+
+    <section class="section bg-light">
+        <div class="container">
+            <h2 class="section-title">Latest Videos</h2>
+            <div class="video-grid">
+                <% if (videos.length > 0) { %>
+                    <% videos.forEach(video => { %>
+                        <div class="video-card">
+                            <div class="video-container">
+                                <% if (video.isYoutube) { %>
+                                    <iframe src="<%= video.videoPath %>" frameborder="0" allowfullscreen></iframe>
+                                <% } else { %>
+                                    <video controls>
+                                        <source src="<%= video.videoPath %>" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                <% } %>
+                            </div>
+                            <div class="video-info">
+                                <h3><%= video.title %></h3>
+                                <% if (video.description) { %>
+                                    <p><%= video.description %></p>
+                                <% } %>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No videos available.</p>
+                <% } %>
+            </div>
+            <div class="text-center">
+                <a href="/videos" class="btn">View All Videos</a>
+            </div>
+        </div>
+    </section>
+
+    <%- include('partials/footer') %>
+    <script src="/js/main.js"></script>
 </body>
 </html>

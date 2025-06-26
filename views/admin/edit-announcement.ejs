@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('../partials/head', {title: announcement ? 'Edit Announcement' : 'New Announcement'}) %>
+    <style>
+        .admin-main {
+            padding: 2rem 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        textarea.form-control {
+            min-height: 200px;
+        }
+        .form-actions {
+            margin-top: 2rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary {
+            background-color: #2c3e50;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/header') %>
+    
+    <main class="admin-main">
+        <div class="container">
+            <h1><%= announcement ? 'Edit Announcement' : 'Create New Announcement' %></h1>
+            
+            <% if (messages && messages.success) { %>
+                <div class="alert alert-success">
+                    <%= messages.success %>
+                </div>
+            <% } %>
+            <% if (messages && messages.error) { %>
+                <div class="alert alert-danger">
+                    <%= messages.error %>
+                </div>
+            <% } %>
+
+            <!-- Fixed form action URL -->
+           <% if (announcement) { %>
+    <form action="/admin/announcements/<%= announcement._id %>" method="POST">
+        <input type="hidden" name="_method" value="PUT">
+<% } else { %>
+    <form action="/admin/announcements" method="POST">
+<% } %>
+                <div class="form-group">
+                    <label for="title">Title *</label>
+                    <input type="text" id="title" name="title" class="form-control" 
+                           value="<%= announcement ? announcement.title : '' %>" required>
+                </div>
+                <div class="form-group">
+                    <label for="content">Content *</label>
+                    <textarea id="content" name="content" class="form-control" rows="5" required><%= announcement ? announcement.content : '' %></textarea>
+                </div>
+                <% if (announcement) { %>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="isActive" <%= announcement.isActive ? 'checked' : '' %>>
+                        Active
+                    </label>
+                </div>
+                <% } %>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <%= announcement ? 'Update Announcement' : 'Create Announcement' %>
+                    </button>
+                    <a href="/announcements/admin" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+        <!-- Add these form groups below your existing content field -->
+<div class="form-group">
+    <label for="mediaTitle">Media Title</label>
+    <input type="text" id="mediaTitle" name="mediaTitle" class="form-control" 
+           value="<%= announcement && announcement.media ? announcement.media.title : '' %>">
+</div>
+
+<div class="form-group">
+    <label for="mediaDescription">Media Description</label>
+    <textarea id="mediaDescription" name="mediaDescription" class="form-control" rows="3">
+        <%= announcement && announcement.media ? announcement.media.description : '' %>
+    </textarea>
+</div>
+
+<div class="form-group">
+    <label for="mediaUrl">Media URL (YouTube, Image, etc.)</label>
+    <input type="text" id="mediaUrl" name="mediaUrl" class="form-control" 
+           value="<%= announcement && announcement.media ? announcement.media.url : '' %>">
+</div>
+    </main>
+
+    <%- include('../partials/footer') %>
+</body>
+</html>

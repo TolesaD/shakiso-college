@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('../partials/head', {title: 'Admin Dashboard'}) %>
+</head>
+<body>
+    <header class="admin-header">
+        <div class="container">
+            <nav class="admin-nav">
+                <a href="/admin/dashboard" class="logo">Admin <span>Dashboard</span></a>
+                <ul class="admin-nav-links">
+                    <li><a href="/admin/dashboard">Dashboard</a></li>
+                    <li><a href="/admin/announcements">Announcements</a></li>
+                    <li><a href="/admin/photos">Photos</a></li>
+                    <li><a href="/admin/videos">Videos</a></li>
+                    <li><a href="/admin/logout">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="container">
+            <h1>Welcome, <%= user.username %></h1>
+            
+            <div class="dashboard-cards">
+                <div class="dashboard-card">
+                    <h3>Announcements</h3>
+                    <p><%= announcementCount %></p>
+                    <a href="/admin/announcements" class="btn">Manage</a>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Photos</h3>
+                    <p><%= photoCount %></p>
+                    <a href="/admin/photos" class="btn">Manage</a>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Videos</h3>
+                    <p><%= videoCount %></p>
+                    <a href="/admin/videos" class="btn">Manage</a>
+                </div>
+            </div>
+
+            <h2>Quick Actions</h2>
+            <div class="highlights">
+                <div class="highlight-card">
+                    <h3>Create Announcement</h3>
+                    <a href="/admin/announcements" class="btn">Add New</a>
+                </div>
+                <div class="highlight-card">
+                    <h3>Upload Photo</h3>
+                    <a href="/admin/photos" class="btn">Upload</a>
+                </div>
+                <div class="highlight-card">
+                    <h3>Add Video</h3>
+                    <a href="/admin/videos" class="btn">Add Video</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <%- include('../partials/footer') %>
+</body>
+</html>

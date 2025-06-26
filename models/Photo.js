@@ -1,27 +1,21 @@
 const mongoose = require('mongoose');
 
-const photoSchema = new mongoose.Schema({
+const PhotoSchema = new mongoose.Schema({
     title: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    url: { // Cloudinary URL for the image
-        type: String,
-        required: true
-    },
-    public_id: { // Cloudinary public ID for deletion
         type: String,
         required: true
     },
     description: {
-        type: String,
-        trim: true
+        type: String
     },
-    uploadedAt: {
+    imagePath: {
+        type: String,
+        required: true
+    },
+    createdAt: {
         type: Date,
         default: Date.now
     }
-}, { timestamps: true });
+});
 
-module.exports = mongoose.model('Photo', photoSchema);
+module.exports = mongoose.model('Photo', PhotoSchema);

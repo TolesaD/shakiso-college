@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('partials/head', {title: 'About Us'}) %>
+</head>
+<body>
+    <%- include('partials/header', {user}) %>
+    
+    <section class="hero" style="background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/about-bg.jpg');">
+        <div class="container">
+            <div class="hero-content">
+                <h1>About Shakiso Poly-Technic College</h1>
+                <p>Learn about our history, mission, and vision for technical education in Ethiopia.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">Our History</h2>
+            <p>Founded in 2005 E.C, Shakiso Poly-Technic College has been a cornerstone of technical education in the Oromia region. Our institution was established to meet the growing demand for skilled professionals in various technical fields.</p>
+            <p>Over the years, we have expanded our programs and facilities to provide comprehensive vocational training that aligns with industry needs. Our graduates have gone on to make significant contributions to Ethiopia's economic development.</p>
+        </div>
+    </section>
+
+    <section class="section bg-light">
+        <div class="container">
+            <div class="grid">
+                <div>
+                    <h2 class="section-title">Our Mission</h2>
+                    <p>To provide quality technical and vocational education that equips students with practical skills, knowledge, and ethical values necessary for professional success and community development.</p>
+                </div>
+                <div>
+                    <h2 class="section-title">Our Vision</h2>
+                    <p>To be a center of excellence in technical education, recognized for producing competent, innovative, and socially responsible professionals who contribute to Ethiopia's industrialization and technological advancement.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">Some Of Our Programs</h2>
+            <div class="highlights">
+                <div class="highlight-card">
+                    <i class="fas fa-cogs"></i>
+                    <h3>Engineering</h3>
+                    <p>Automotive Mechanics, and Electrical Electronics programs with hands-on training.</p>
+                </div>
+                <div class="highlight-card">
+                    <i class="fas fa-laptop"></i>
+                    <h3>Information Technology</h3>
+                    <p>Hardware and Network Services (HNS), Database Management courses.</p>
+                </div>
+                <div class="highlight-card">
+                    <i class="fas fa-briefcase"></i>
+                    <h3>Business</h3>
+                    <p>Accounting and Finance upto Level Iv programs for future business leaders.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <%- include('partials/footer') %>
+    <script src="/js/main.js"></script>
+</body>
+</html>

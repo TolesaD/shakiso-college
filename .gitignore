@@ -1,5 +1,11 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
-uploads/ # If you were storing files locally (Cloudinary avoids this)
-npm-debug.log
+# Uploads and local files
+public/uploads/
+# System files
 .DS_Store
+*.log
+*.tmp

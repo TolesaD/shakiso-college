@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('../partials/head', {title: 'Manage Videos'}) %>
+</head>
+<body>
+    <header class="admin-header">
+        <div class="container">
+            <nav class="admin-nav">
+                <a href="/admin/dashboard" class="logo">Admin <span>Dashboard</span></a>
+                <ul class="admin-nav-links">
+                    <li><a href="/admin/dashboard">Dashboard</a></li>
+                    <li><a href="/admin/announcements">Announcements</a></li>
+                    <li><a href="/admin/photos">Photos</a></li>
+                    <li><a href="/admin/videos">Videos</a></li>
+                    <li><a href="/admin/logout">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="container">
+            <h1>Manage Videos</h1>
+            
+            <div class="card">
+                <h2>Add New Video</h2>
+                <form action="/admin/videos" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="title" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <textarea id="description" name="description" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Video Source</label>
+                        <div>
+                            <input type="radio" id="youtube" name="source" value="youtube" checked>
+                            <label for="youtube">YouTube URL</label>
+                            <input type="radio" id="upload" name="source" value="upload">
+                            <label for="upload">Upload Video</label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="youtubeUrlGroup">
+                        <label for="youtubeUrl">YouTube URL</label>
+                        <input type="text" id="youtubeUrl" name="youtubeUrl" class="form-control" placeholder="https://www.youtube.com/watch?v=...">
+                    </div>
+                    <div class="form-group" id="videoUploadGroup" style="display: none;">
+                        <label for="video">Video File</label>
+                        <input type="file" id="video" name="video" class="form-control" accept="video/*">
+                    </div>
+                    <button type="submit" class="btn">Add Video</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Video Gallery</h2>
+                <div class="video-grid">
+                    <% videos.forEach(video => { %>
+                        <div class="video-card">
+                            <div class="video-container">
+                                <% if (video.isYoutube) { %>
+                                    <iframe src="<%= video.videoPath %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                <% } else { %>
+                                    <video controls>
+                                        <source src="<%= video.videoPath %>" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                <% } %>
+                            </div>
+                            <div class="video-info">
+                                <h3><%= video.title %></h3>
+                                <% if (video.description) { %>
+                                    <p><%= video.description %></p>
+                                <% } %>
+                                <form action="/admin/videos/<%= video._id %>/delete" method="POST">
+                                    <button type="submit" class="btn btn-small">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <%- include('../partials/footer') %>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const youtubeRadio = document.getElementById('youtube');
+            const uploadRadio = document.getElementById('upload');
+            const youtubeUrlGroup = document.getElementById('youtubeUrlGroup');
+            const videoUploadGroup = document.getElementById('videoUploadGroup');
+            
+            youtubeRadio.addEventListener('change', function() {
+                youtubeUrlGroup.style.display = 'block';
+                videoUploadGroup.style.display = 'none';
+            });
+            
+            uploadRadio.addEventListener('change', function() {
+                youtubeUrlGroup.style.display = 'none';
+                videoUploadGroup.style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>
