@@ -3,12 +3,13 @@ process.removeAllListeners('warning');
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const MongoStore = require('connect-mongo');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
-const flash = require('express-flash');
+const flash = require('connect-flash');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const methodOverride = require('method-override');
 
 // Initialize Express app
@@ -18,16 +19,22 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(methodOverride('_method'));
 
 // Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+        maxAge: 24 * 60 * 60 * 1000,
+        httpOnly: true
+    },
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        ttl: 24 * 60 * 60
+    })
 }));
 
 // Flash messages
@@ -57,37 +64,58 @@ const Announcement = require('./models/Announcement');
 const Photo = require('./models/Photo');
 const Video = require('./models/Video');
 
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, 'public/uploads');
-        fs.mkdirSync(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
+// Configure image upload
+const imageStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadPath = path.join(__dirname, 'public/uploads/images');
+    await fs.mkdir(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
 });
 
-const fileFilter = (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|gif|mp4|mov|avi/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-
-    if (extname && mimetype) {
-        return cb(null, true);
-    } else {
-        cb(new Error('Error: Only images and videos are allowed!'));
-    }
+const imageFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only images (JPEG, JPG, PNG, GIF) are allowed'), false);
+  }
 };
 
-const upload = multer({
-    storage: storage,
-    limits: { 
-        fileSize: 50 * 1024 * 1024, // 50MB limit
-        files: 1
-    },
-    fileFilter: fileFilter
+const uploadImage = multer({
+  storage: imageStorage,
+  fileFilter: imageFilter,
+  limits: { fileSize: 2048 * 1024 * 1024 } // 5MB
+});
+
+// Configure video upload
+const videoStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadPath = path.join(__dirname, 'public/uploads/videos');
+    await fs.mkdir(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const videoFilter = (req, file, cb) => {
+  const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only videos (MP4, WebM, OGG) are allowed'), false);
+  }
+};
+
+const uploadVideo = multer({
+  storage: videoStorage,
+  fileFilter: videoFilter,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
 
 // Set EJS as view engine
@@ -100,10 +128,36 @@ app.use((req, res, next) => {
     next();
 });
 
-// Routes
+// ======================
+// AUTHENTICATION MIDDLEWARE
+// ======================
+
+function ensureAuthenticated(req, res, next) {
+    if (req.session.user && req.session.user.role === 'admin') {
+        return next();
+    }
+    req.flash('error', 'Please login to access this page');
+    res.redirect('/admin/login');
+}
+
+// ======================
+// ERROR HANDLING MIDDLEWARE
+// ======================
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    req.flash('error', err.message);
+    return res.redirect('back');
+  }
+  next(err);
+});
+
+// ======================
+// FRONTEND ROUTES
+// ======================
+
 app.get('/', async (req, res) => {
     try {
-        const announcements = await Announcement.find().sort({ createdAt: -1 }).limit(5);
+        const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(5);
         const photos = await Photo.find().sort({ createdAt: -1 }).limit(6);
         const videos = await Video.find().sort({ createdAt: -1 }).limit(3);
         res.render('index', { 
@@ -174,7 +228,7 @@ app.get('/videos', async (req, res) => {
 // ADMIN ROUTES
 // ======================
 
-// Admin Login
+// Admin Login Routes 
 app.get('/admin/login', (req, res) => {
     if (req.session.user) {
         return res.redirect('/admin/dashboard');
@@ -244,7 +298,22 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Announcements Management
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/uploads/announcements/'); // Adjust path as needed
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage: storage });
+
+// ANNOUNCEMENTS ROUTES
+// ======================
+
+// List announcements
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
     try {
         const announcements = await Announcement.find().sort({ createdAt: -1 });
@@ -264,9 +333,9 @@ app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
 });
 
 // New Announcement Form
-app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
+app.get('/admin/announcements', ensureAuthenticated, (req, res) => {
     res.render('admin/edit-announcement', {
-        announcement: null, // Important for new announcements
+        announcement: null,
         user: req.session.user,
         messages: req.flash()
     });
@@ -276,6 +345,10 @@ app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
 app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) => {
     try {
         const announcement = await Announcement.findById(req.params.id);
+        if (!announcement) {
+            req.flash('error', 'Announcement not found');
+            return res.redirect('/admin/announcements');
+        }
         res.render('admin/edit-announcement', {
             announcement,
             user: req.session.user,
@@ -291,7 +364,7 @@ app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) =
 // Create Announcement
 app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
     try {
-        const { title, content, mediaTitle, mediaDescription, mediaUrl } = req.body;
+        const { title, content, isActive, mediaTitle, mediaDescription, mediaUrl } = req.body;
         
         const newAnnouncement = new Announcement({ 
             title, 
@@ -302,7 +375,7 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
                 url: mediaUrl,
                 type: mediaUrl ? (mediaUrl.includes('youtube') ? 'video' : 'image') : null
             },
-            createdAt: new Date()
+            author: req.session.user.id
         });
         
         await newAnnouncement.save();
@@ -310,8 +383,29 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
         res.redirect('/admin/announcements');
     } catch (err) {
         console.error('Create announcement error:', err);
-        req.flash('error', 'Failed to create announcement');
-        res.redirect('/admin/announcements/new');
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to create announcement');
+        res.redirect('/admin/announcements');
+    }
+});
+
+// Public route for all users to view announcements
+app.get('/announcements', async (req, res) => {
+    try {
+        const announcements = await Announcement.find({ 
+            isActive: true  // Only show active announcements
+        }).sort({ createdAt: -1 });
+
+        res.render('announcements', {  // Will create this template next
+            announcements,
+            currentRoute: 'announcements'
+        });
+    } catch (err) {
+        console.error('Public announcements error:', err);
+        res.status(500).render('error', {
+            message: 'Failed to load announcements'
+        });
     }
 });
 
@@ -329,32 +423,54 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
                 description: mediaDescription,
                 url: mediaUrl,
                 type: mediaUrl ? (mediaUrl.includes('youtube') ? 'video' : 'image') : null
-            }
-        });
+            },
+            updatedAt: Date.now()
+        }, { new: true, runValidators: true });
         
         req.flash('success', 'Announcement updated successfully');
         res.redirect('/admin/announcements');
     } catch (err) {
         console.error('Update announcement error:', err);
-        req.flash('error', 'Failed to update announcement');
-        res.redirect(`/admin/announcements/${req.params.id}`/edit);
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to update announcement');
+        res.redirect(`/admin/announcements/${req.params.id}/edit`);
     }
 });
 
 // Delete Announcement
+// Delete Announcement - Updated Route
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     try {
-        await Announcement.findByIdAndDelete(req.params.id);
-        req.flash('success', 'Announcement deleted successfully');
-        res.redirect('/admin/announcements');
+        const announcement = await Announcement.findByIdAndDelete(req.params.id);
+        
+        if (!announcement) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Announcement not found' 
+            });
+        }
+
+        // Return JSON response
+        return res.json({ 
+            success: true,
+            message: 'Announcement deleted successfully'
+        });
+
     } catch (err) {
         console.error('Delete announcement error:', err);
-        req.flash('error', 'Failed to delete announcement');
-        res.redirect('/admin/announcements');
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to delete announcement' 
+        });
     }
 });
 
-// Photos Management
+// ======================
+// PHOTOS ROUTES
+// ======================
+
+// List photos
 app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
     try {
         const photos = await Photo.find().sort({ createdAt: -1 });
@@ -371,6 +487,17 @@ app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
             error: process.env.NODE_ENV === 'development' ? err : {}
         });
     }
+});
+
+//Photo Route
+
+// New Photo Form
+app.get('/admin/photos', ensureAuthenticated, (req, res) => {
+    res.render('admin/edit-photo', {
+        photo: null,
+        user: req.session.user,
+        messages: req.flash()
+    });
 });
 
 // Edit Photo Form
@@ -394,20 +521,20 @@ app.get('/admin/photos/:id/edit', ensureAuthenticated, async (req, res) => {
 });
 
 // Create Photo
-app.post('/admin/photos', ensureAuthenticated, upload.single('photo'), async (req, res) => {
+app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             req.flash('error', 'Please select an image file');
-            return res.redirect('/admin/photos');
+            return res.redirect('/admin/photos/new');
         }
 
-        const { title, description } = req.body;
-        const imagePath = '/uploads/' + req.file.filename;
-
+        const { title, description, isFeatured } = req.body;
         const newPhoto = new Photo({
-            title: title || 'Untitled',
+            title,
             description,
-            imagePath
+            imageUrl: '/uploads/images/' + req.file.filename,
+            isFeatured: isFeatured === 'on',
+            uploadedBy: req.session.user.id
         });
 
         await newPhoto.save();
@@ -416,67 +543,105 @@ app.post('/admin/photos', ensureAuthenticated, upload.single('photo'), async (re
     } catch (err) {
         console.error('Photo upload error:', err);
         
-        // Delete the uploaded file if error occurred
         if (req.file) {
-            fs.unlink(path.join(__dirname, 'public', 'uploads', req.file.filename), () => {});
+            fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename))
+                .catch(unlinkErr => console.error('Failed to delete uploaded file:', unlinkErr));
         }
         
-        req.flash('error', 'Failed to upload photo');
-        res.redirect('/admin/photos');
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to upload photo');
+        res.redirect('/admin/photos/new');
     }
 });
 
 // Update Photo
-app.post('/admin/photos/:id', ensureAuthenticated, upload.single('photo'), async (req, res) => {
+app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
     try {
-        const { title, description } = req.body;
-        const updateData = { title, description };
-        
+        const { title, description, isFeatured } = req.body;
+        const updateData = { 
+            title, 
+            description,
+            isFeatured: isFeatured === 'on',
+            updatedAt: Date.now()
+        };
+
         if (req.file) {
-            updateData.imagePath = '/uploads/' + req.file.filename;
-            // Delete old file if updating
+            updateData.imageUrl = '/uploads/images/' + req.file.filename;
             const oldPhoto = await Photo.findById(req.params.id);
-            if (oldPhoto?.imagePath) {
-                const oldPath = path.join(__dirname, 'public', oldPhoto.imagePath);
+            if (oldPhoto?.imageUrl) {
+                const oldPath = path.join(__dirname, 'public', oldPhoto.imageUrl);
                 if (fs.existsSync(oldPath)) {
-                    fs.unlinkSync(oldPath);
+                    fs.unlink(oldPath)
+                        .catch(unlinkErr => console.error('Failed to delete old image:', unlinkErr));
                 }
             }
         }
-        
-        await Photo.findByIdAndUpdate(req.params.id, updateData);
+
+        await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
         req.flash('success', 'Photo updated successfully');
         res.redirect('/admin/photos');
     } catch (err) {
         console.error('Photo update error:', err);
-        req.flash('error', 'Failed to update photo');
-        res.redirect(`/admin/photos`);
+        if (req.file) {
+            fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename))
+                .catch(unlinkErr => console.error('Failed to delete uploaded file:', unlinkErr));
+        }
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to update photo');
+        res.redirect(`/admin/photos/${req.params.id}/edit`);
     }
 });
 
-// Delete Photo
-app.post('/admin/photos/:id/delete', ensureAuthenticated, async (req, res) => {
+// Delete Photo - Optimized Version
+app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
     try {
+        // First get the photo details
         const photo = await Photo.findById(req.params.id);
-        
-        if (photo) {
-            const filePath = path.join(__dirname, 'public', photo.imagePath);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-            await Photo.findByIdAndDelete(req.params.id);
+        if (!photo) {
+            return res.status(404).json({ success: false, message: 'Photo not found' });
         }
-        
-        req.flash('success', 'Photo deleted successfully');
-        res.redirect('/admin/photos');
+
+        // Store the file path
+        const filePath = photo.imageUrl ? path.join(__dirname, 'public', photo.imageUrl) : null;
+
+        // Delete from database first
+        await Photo.findByIdAndDelete(req.params.id);
+
+        // Then delete the file if it exists
+        let fileDeleted = false;
+        if (filePath && fs.existsSync(filePath)) {
+            try {
+                await fs.unlink(filePath);
+                fileDeleted = true;
+            } catch (unlinkErr) {
+                console.error('File deletion error:', unlinkErr);
+                // Continue even if file deletion fails
+            }
+        }
+
+        // Return JSON response for AJAX calls
+        return res.json({ 
+            success: true,
+            message: 'Photo deleted successfully',
+            fileDeleted: fileDeleted
+        });
+
     } catch (err) {
         console.error('Delete photo error:', err);
-        req.flash('error', 'Failed to delete photo');
-        res.redirect('/admin/photos');
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to delete photo' 
+        });
     }
 });
 
-// Videos Management
+// ======================
+// VIDEOS ROUTES
+// ======================
+
+// List videos
 app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
     try {
         const videos = await Video.find().sort({ createdAt: -1 });
@@ -495,66 +660,162 @@ app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Create Video
-app.post('/admin/videos', ensureAuthenticated, upload.single('video'), async (req, res) => {
-    try {
-        const { title, description, youtubeUrl } = req.body;
-        let videoPath, isYoutube = false;
+// New Video Form
+app.get('/admin/videos/new', ensureAuthenticated, (req, res) => {
+    res.render('admin/edit-video', {
+        video: null,
+        user: req.session.user,
+        messages: req.flash()
+    });
+});
 
-        if (youtubeUrl) {
-            const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-            const match = youtubeUrl.match(regExp);
-            
-            if (match && match[1]) {
-                videoPath = `https://www.youtube.com/embed/${match[1]}`;
-                isYoutube = true;
-            } else {
-                req.flash('error', 'Please provide a valid YouTube URL');
-                return res.redirect('/admin/videos');
-            }
-        } else if (req.file) {
-            videoPath = '/uploads/' + req.file.filename;
-        } else {
-            req.flash('error', 'Please provide either a YouTube URL or video file');
+// Edit Video Form
+app.get('/admin/videos/:id/edit', ensureAuthenticated, async (req, res) => {
+    try {
+        const video = await Video.findById(req.params.id);
+        if (!video) {
+            req.flash('error', 'Video not found');
             return res.redirect('/admin/videos');
         }
-
-        const newVideo = new Video({
-            title: title || 'Untitled Video',
-            description: description || '',
-            videoPath,
-            isYoutube,
-            createdAt: new Date()
+        res.render('admin/edit-video', {
+            video,
+            user: req.session.user,
+            messages: req.flash()
         });
-
-        await newVideo.save();
-        req.flash('success', 'Video added successfully');
-        res.redirect('/admin/videos');
     } catch (err) {
-        console.error('Video upload error:', err);
-        
-        if (req.file) {
-            fs.unlink(path.join(__dirname, 'public', 'uploads', req.file.filename), () => {});
-        }
-        
-        req.flash('error', 'Failed to add video');
+        console.error('Video edit error:', err);
+        req.flash('error', 'Failed to load video for editing');
         res.redirect('/admin/videos');
     }
 });
 
-// Delete Video
-app.post('/admin/videos/:id/delete', ensureAuthenticated, async (req, res) => {
+// Create Video
+app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
     try {
+        const { title, description, isFeatured, source, youtubeUrl } = req.body;
+        
+        if (source === 'upload' && !req.file) {
+            req.flash('error', 'Please upload a video file');
+            return res.redirect('/admin/videos/new');
+        }
+
+        if (source === 'youtube' && !youtubeUrl) {
+            req.flash('error', 'Please provide a YouTube URL');
+            return res.redirect('/admin/videos/new');
+        }
+
+        const videoData = {
+            title,
+            description,
+            isFeatured: isFeatured === 'on',
+            uploadedBy: req.session.user.id,
+            source
+        };
+
+        if (source === 'youtube') {
+            const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+            const match = youtubeUrl.match(regExp);
+            if (!match) {
+                req.flash('error', 'Invalid YouTube URL');
+                return res.redirect('/admin/videos/new');
+            }
+            videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
+        } else {
+            videoData.videoUrl = '/uploads/videos/' + req.file.filename;
+        }
+
+        await new Video(videoData).save();
+        req.flash('success', 'Video added successfully');
+        res.redirect('/admin/videos');
+    } catch (err) {
+        console.error('Video upload error:', err);
+        if (req.file) {
+            fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename))
+                .catch(unlinkErr => console.error('Failed to delete uploaded video:', unlinkErr));
+        }
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to add video');
+        res.redirect('/admin/videos/new');
+    }
+});
+
+// Update Video
+app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
+    try {
+        const { title, description, isFeatured, source, youtubeUrl } = req.body;
         const video = await Video.findById(req.params.id);
         
-        if (video && !video.isYoutube) {
-            const filePath = path.join(__dirname, 'public', video.videoPath);
+        if (!video) {
+            req.flash('error', 'Video not found');
+            return res.redirect('/admin/videos');
+        }
+
+        const updateData = {
+            title,
+            description,
+            isFeatured: isFeatured === 'on',
+            updatedAt: Date.now(),
+            source
+        };
+
+        if (source === 'youtube') {
+            const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+            const match = youtubeUrl.match(regExp);
+            if (!match) {
+                req.flash('error', 'Invalid YouTube URL');
+                return res.redirect(`/admin/videos/${req.params.id}/edit`);
+            }
+            updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
+            
+            if (video.source === 'upload' && video.videoUrl) {
+                const oldPath = path.join(__dirname, 'public', video.videoUrl);
+                if (fs.existsSync(oldPath)) {
+                    fs.unlink(oldPath)
+                        .catch(unlinkErr => console.error('Failed to delete old video:', unlinkErr));
+                }
+            }
+        } else if (req.file) {
+            updateData.videoUrl = '/uploads/videos/' + req.file.filename;
+            
+            if (video.source === 'upload' && video.videoUrl) {
+                const oldPath = path.join(__dirname, 'public', video.videoUrl);
+                if (fs.existsSync(oldPath)) {
+                    fs.unlink(oldPath)
+                        .catch(unlinkErr => console.error('Failed to delete old video:', unlinkErr));
+                }
+            }
+        } else {
+            updateData.videoUrl = video.videoUrl;
+        }
+
+        await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+        req.flash('success', 'Video updated successfully');
+        res.redirect('/admin/videos');
+    } catch (err) {
+        console.error('Video update error:', err);
+        if (req.file) {
+            fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename))
+                .catch(unlinkErr => console.error('Failed to delete uploaded video:', unlinkErr));
+        }
+        req.flash('error', err instanceof mongoose.Error.ValidationError 
+            ? Object.values(err.errors).map(e => e.message).join(', ')
+            : 'Failed to update video');
+        res.redirect(`/admin/videos/${req.params.id}/edit`);
+    }
+});
+
+// Delete Video
+app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
+    try {
+        const video = await Video.findByIdAndDelete(req.params.id);
+        if (video && video.source === 'upload' && video.videoUrl) {
+            const filePath = path.join(__dirname, 'public', video.videoUrl);
             if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
+                fs.unlink(filePath)
+                    .catch(unlinkErr => console.error('Failed to delete video file:', unlinkErr));
             }
         }
-        
-        await Video.findByIdAndDelete(req.params.id);
         req.flash('success', 'Video deleted successfully');
         res.redirect('/admin/videos');
     } catch (err) {
@@ -564,28 +825,9 @@ app.post('/admin/videos/:id/delete', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Logout
-app.get('/admin/logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error('Logout error:', err);
-            return res.status(500).render('error', {
-                message: 'Failed to logout',
-                error: process.env.NODE_ENV === 'development' ? err : {}
-            });
-        }
-        res.redirect('/admin/login');
-    });
-});
-
-// Middleware to ensure user is authenticated and is admin
-function ensureAuthenticated(req, res, next) {
-    if (req.session.user && req.session.user.role === 'admin') {
-        return next();
-    }
-    req.flash('error', 'Please login to access this page');
-    res.redirect('/admin/login');
-}
+// ======================
+// SERVER INITIALIZATION
+// ======================
 
 // Initialize admin user if not exists
 async function initializeAdmin() {
@@ -614,14 +856,27 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
+// Start server (Updated)
 (async () => {
     try {
         await connectDB();
+        await initializeAdmin();
+        
         const PORT = process.env.PORT || 3000;
-        app.listen(PORT, async () => {
+        const server = app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
-            await initializeAdmin();
+        });
+        
+        // Handle server shutdown gracefully
+        process.on('SIGTERM', () => {
+            console.log('SIGTERM received. Shutting down gracefully');
+            server.close(() => {
+                console.log('Server closed');
+                mongoose.connection.close(false, () => {
+                    console.log('MongoDB connection closed');
+                    process.exit(0);
+                });
+            });
         });
     } catch (err) {
         console.error('Server startup error:', err);

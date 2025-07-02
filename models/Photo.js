@@ -8,10 +8,6 @@ const PhotoSchema = new mongoose.Schema({
     description: {
         type: String
     },
-    imagePath: {
-        type: String,
-        required: true
-    },
     createdAt: {
         type: Date,
         default: Date.now

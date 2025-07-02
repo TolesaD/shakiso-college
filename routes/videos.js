@@ -95,6 +95,87 @@ router.post('/admin', ensureAuthenticated, upload.single('video'), async (req, r
     res.redirect('/videos/admin');
   }
 });
+// Admin - Show edit video form
+router.get('/admin/:id/edit', ensureAuthenticated, async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id).lean();
+    if (!video) {
+      req.flash('error_msg', 'Video not found');
+      return res.redirect('/videos/admin');
+    }
+    res.render('admin/edit-video', { 
+      title: 'Edit Video',
+      video,
+      messages: {
+        success: req.flash('success_msg'),
+        error: req.flash('error_msg')
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Error loading video');
+    res.redirect('/admin/videos');
+  }
+});
+
+// Admin - Update video (title/description/featured status)
+router.put('/admin/:id', ensureAuthenticated, async (req, res) => {
+  try {
+    const { title, description, isFeatured } = req.body;
+    
+    const updated = await Video.findByIdAndUpdate(
+      req.params.id,
+      {
+        title,
+        description,
+        isFeatured: isFeatured === 'on',
+        updatedAt: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      req.flash('error_msg', 'Video not found');
+      return res.redirect('/admin/videos');
+    }
+
+    req.flash('success_msg', 'Video updated successfully');
+    res.redirect('/admin/videos');
+  } catch (err) {
+    console.error(err);
+    let errorMsg = 'Error updating video';
+    if (err instanceof mongoose.Error.ValidationError) {
+      errorMsg = Object.values(err.errors).map(val => val.message).join(', ');
+    }
+    req.flash('error_msg', errorMsg);
+    res.redirect(`/admin/videos/${req.params.id}/edit`);
+  }
+});
+
+// Update the delete route to use DELETE method
+router.delete('/admin/:id', ensureAuthenticated, async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.id);
+    if (!video) {
+      req.flash('error_msg', 'Video not found');
+      return res.redirect('/admin/videos');
+    }
+    
+    // Delete file from filesystem
+    const filePath = path.join(__dirname, '../../public', video.videoUrl);
+    fs.unlink(filePath, (err) => {
+      if (err) console.error('Error deleting file:', err);
+    });
+    
+    await Video.findByIdAndDelete(req.params.id);
+    req.flash('success_msg', 'Video deleted successfully');
+    res.redirect('/admin/videos');
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Error deleting video');
+    res.redirect('/admin/videos');
+  }
+});
 
 // Admin - Delete video
 router.post('/admin/:id/delete', ensureAuthenticated, async (req, res) => {
@@ -102,7 +183,7 @@ router.post('/admin/:id/delete', ensureAuthenticated, async (req, res) => {
     const video = await Video.findById(req.params.id);
     if (!video) {
       req.flash('error_msg', 'Video not found');
-      return res.redirect('/videos/admin');
+      return res.redirect('/admin/videos');
     }
     
     // Delete file from filesystem
@@ -117,7 +198,7 @@ router.post('/admin/:id/delete', ensureAuthenticated, async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash('error_msg', 'Error deleting video');
-    res.redirect('/videos/admin');
+    res.redirect('/admin/videos');
   }
 });
 

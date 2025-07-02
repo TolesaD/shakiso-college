@@ -1,19 +1,183 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <%- include('../partials/head', {title: 'Manage Videos'}) %>
+    <style>
+        .admin-main {
+            padding: 2rem 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        textarea.form-control {
+            min-height: 100px;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        .video-card {
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        .video-container iframe,
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .video-info {
+            padding: 1rem;
+            background: white;
+        }
+        .video-info h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+        }
+        .video-info p {
+            margin: 0 0 1rem 0;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .video-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .video-actions .btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+        .featured-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f39c12;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            z-index: 1;
+        }
+        .source-toggle {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .source-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .admin-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 0;
+        }
+        .admin-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .admin-nav-links {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+        }
+        .admin-nav-links a {
+            color: white;
+            text-decoration: none;
+        }
+        .admin-nav-links a.active {
+            font-weight: bold;
+            border-bottom: 2px solid white;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
 </head>
 <body>
     <header class="admin-header">
         <div class="container">
             <nav class="admin-nav">
-                <a href="/admin/dashboard" class="logo">Admin <span>Dashboard</span></a>
+                <a href="/admin/dashboard" class="logo">Admin Dashboard</a>
                 <ul class="admin-nav-links">
                     <li><a href="/admin/dashboard">Dashboard</a></li>
                     <li><a href="/admin/announcements">Announcements</a></li>
                     <li><a href="/admin/photos">Photos</a></li>
-                    <li><a href="/admin/videos">Videos</a></li>
+                    <li><a href="/admin/videos" class="active">Videos</a></li>
                     <li><a href="/admin/logout">Logout</a></li>
                 </ul>
             </nav>
@@ -24,65 +188,108 @@
         <div class="container">
             <h1>Manage Videos</h1>
             
+            <% if (messages && messages.success) { %>
+                <div class="alert alert-success">
+                    <%= messages.success %>
+                </div>
+            <% } %>
+            <% if (messages && messages.error) { %>
+                <div class="alert alert-danger">
+                    <%= messages.error %>
+                </div>
+            <% } %>
+
             <div class="card">
                 <h2>Add New Video</h2>
-                <form action="/admin/videos" method="POST" enctype="multipart/form-data">
+                <form id="videoForm" action="/admin/videos" method="POST" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label for="title">Title</label>
+                        <label for="title">Title *</label>
                         <input type="text" id="title" name="title" class="form-control" required>
                     </div>
                     <div class="form-group">
-                        <label for="description">Description (Optional)</label>
-                        <textarea id="description" name="description" class="form-control"></textarea>
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" class="form-control" rows="3"></textarea>
                     </div>
+                    
                     <div class="form-group">
-                        <label>Video Source</label>
-                        <div>
-                            <input type="radio" id="youtube" name="source" value="youtube" checked>
-                            <label for="youtube">YouTube URL</label>
-                            <input type="radio" id="upload" name="source" value="upload">
-                            <label for="upload">Upload Video</label>
+                        <label>Video Source *</label>
+                        <div class="source-toggle">
+                            <label>
+                                <input type="radio" id="youtube" name="source" value="youtube" checked>
+                                YouTube URL
+                            </label>
+                            <label>
+                                <input type="radio" id="upload" name="source" value="upload">
+                                Upload Video
+                            </label>
                         </div>
                     </div>
+                    
                     <div class="form-group" id="youtubeUrlGroup">
-                        <label for="youtubeUrl">YouTube URL</label>
-                        <input type="text" id="youtubeUrl" name="youtubeUrl" class="form-control" placeholder="https://www.youtube.com/watch?v=...">
+                        <label for="youtubeUrl">YouTube URL *</label>
+                        <input type="url" id="youtubeUrl" name="youtubeUrl" class="form-control" 
+                               placeholder="https://www.youtube.com/watch?v=..." required>
+                        <small class="text-muted">Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ</small>
                     </div>
+                    
                     <div class="form-group" id="videoUploadGroup" style="display: none;">
-                        <label for="video">Video File</label>
-                        <input type="file" id="video" name="video" class="form-control" accept="video/*">
+                        <label for="video">Video File *</label>
+                        <input type="file" id="video" name="video" class="form-control"accept="video/mp4,video/webm,video/ogg">
+                        <small class="text-muted">Max file size: 50MB. Formats: MP4, WebM, OGG</small>
                     </div>
-                    <button type="submit" class="btn">Add Video</button>
+                    
+                    <div class="form-check mb-3">
+                        <input type="checkbox" id="isFeatured" name="isFeatured" class="form-check-input">
+                        <label class="form-check-label" for="isFeatured">Featured Video</label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Add Video</button>
                 </form>
             </div>
 
             <div class="card">
                 <h2>Video Gallery</h2>
-                <div class="video-grid">
-                    <% videos.forEach(video => { %>
-                        <div class="video-card">
-                            <div class="video-container">
-                                <% if (video.isYoutube) { %>
-                                    <iframe src="<%= video.videoPath %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                                <% } else { %>
-                                    <video controls>
-                                        <source src="<%= video.videoPath %>" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
+                <% if (videos && videos.length > 0) { %>
+                    <div class="video-grid">
+                        <% videos.forEach(video => { %>
+                            <div class="video-card">
+                                <% if (video.isFeatured) { %>
+                                    <span class="featured-badge">Featured</span>
                                 <% } %>
+                                <div class="video-container">
+                                    <% if (video.source === 'youtube') { %>
+                                        <iframe src="https://www.youtube.com/embed/<%= video.videoUrl.split('v=')[1] %>" 
+                                                frameborder="0" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                allowfullscreen></iframe>
+                                    <% } else { %>
+                                        <video controls>
+                                            <source src="<%= video.videoUrl %>" type="video/mp4">
+                                            Your browser does not support the video tag.
+                                        </video>
+                                    <% } %>
+                                </div>
+                                <div class="video-info">
+                                    <h3><%= video.title %></h3>
+                                    <% if (video.description) { %>
+                                        <p><%= video.description %></p>
+                                    <% } %>
+                                    <div class="video-actions">
+                                        <a href="/admin/videos/<%= video._id %>/edit" class="btn btn-secondary">Edit</a>
+                                        <form method="POST" action="/admin/videos/<%= video._id %>?_method=DELETE">
+                                            <button type="submit" class="btn btn-danger"
+                                                    onclick="return confirm('Are you sure you want to delete this video?')">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="video-info">
-                                <h3><%= video.title %></h3>
-                                <% if (video.description) { %>
-                                    <p><%= video.description %></p>
-                                <% } %>
-                                <form action="/admin/videos/<%= video._id %>/delete" method="POST">
-                                    <button type="submit" class="btn btn-small">Delete</button>
-                                </form>
-                            </div>
-                        </div>
-                    <% }) %>
-                </div>
+                        <% }) %>
+                    </div>
+                <% } else { %>
+                    <p style="text-align: center; padding: 2rem;">No videos found. Add your first video!</p>
+                <% } %>
             </div>
         </div>
     </main>
@@ -93,17 +300,41 @@
             const youtubeRadio = document.getElementById('youtube');
             const uploadRadio = document.getElementById('upload');
             const youtubeUrlGroup = document.getElementById('youtubeUrlGroup');
-            const videoUploadGroup = document.getElementById('videoUploadGroup');
+            const videoUploadGroup = document.getElementById('videoUploadGroup');const youtubeUrlInput = document.getElementById('youtubeUrl');
+            const videoInput = document.getElementById('video');
             
-            youtubeRadio.addEventListener('change', function() {
-                youtubeUrlGroup.style.display = 'block';
-                videoUploadGroup.style.display = 'none';
-            });
+            // Toggle between YouTube and Upload
+            function toggleSource() {
+                if (youtubeRadio.checked) {
+                    youtubeUrlGroup.style.display = 'block';
+                    videoUploadGroup.style.display = 'none';
+                    youtubeUrlInput.required = true;
+                    videoInput.required = false;
+                } else {
+                    youtubeUrlGroup.style.display = 'none';
+                    videoUploadGroup.style.display = 'block';
+                    youtubeUrlInput.required = false;
+                    videoInput.required = true;
+                }
+            }
             
-            uploadRadio.addEventListener('change', function() {
-                youtubeUrlGroup.style.display = 'none';
-                videoUploadGroup.style.display = 'block';
+            youtubeRadio.addEventListener('change', toggleSource);
+            uploadRadio.addEventListener('change', toggleSource);
+
+            // Form validation
+            document.getElementById('videoForm').addEventListener('submit', function(e) {
+                if (youtubeRadio.checked && !isValidYouTubeUrl(youtubeUrlInput.value)) {
+                    e.preventDefault();
+                    alert('Please enter a valid YouTube URL');
+                    return false;
+                }
+                return true;
             });
+
+            function isValidYouTubeUrl(url) {
+                const pattern = /^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
+                return pattern.test(url);
+            }
         });
     </script>
 </body>

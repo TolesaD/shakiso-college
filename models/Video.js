@@ -5,16 +5,18 @@ const VideoSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    description: {
-        type: String
-    },
-    videoPath: {
-        type: String,
-        required: true
+    description: String,
+    isFeatured: {
+        type: Boolean,
+        default: false
     },
     isYoutube: {
         type: Boolean,
         default: false
+    },
+    uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     createdAt: {
         type: Date,
