@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -28,12 +29,13 @@
     "express-session": "^1.18.1",
     "helmet": "^8.1.0",
     "method-override": "^3.0.0",
-    "mongoos": "^0.0.1-security",
     "mongoose": "^7.0.0",
-    "multer": "^1.4.5-lts.1",
-    "router": "^2.2.0"
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

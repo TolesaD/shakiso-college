@@ -438,7 +438,6 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Delete Announcement
 // Delete Announcement - Updated Route
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     try {
