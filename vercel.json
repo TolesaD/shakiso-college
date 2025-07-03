@@ -6,6 +6,7 @@
       "use": "@vercel/node",
       "config": {
         "maxLambdaSize": "50mb",
+        "memory": 3008,
         "includeFiles": [
           "views/**",
           "public/**",
@@ -20,7 +21,9 @@
       "dest": "server.js"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
   }
 }

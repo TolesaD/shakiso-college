@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "npm install",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm install && npm install --only=prod",
+    "vercel-build": "npm run build"
   },
   "keywords": [
     "college",
