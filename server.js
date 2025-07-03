@@ -12,15 +12,6 @@ const path = require('path');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
 
-// Environment validation
-const requiredEnvVars = ['MONGODB_URI', 'SESSION_SECRET'];
-requiredEnvVars.forEach(env => {
-  if (!process.env[env]) {
-    console.error(`Missing required environment variable: ${env}`);
-    process.exit(1);
-  }
-});
-
 // Initialize Express app
 const app = express();
 
