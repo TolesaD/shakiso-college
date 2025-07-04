@@ -21,23 +21,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(methodOverride('_method'));
 
-// Add this right before your /debug-db route
-console.log('Database connection state:', db.connection?.readyState || 'Not connected');
-
-app.get('/debug-db', async (req, res) => {
-  // ... existing code
-});
-
-// Add this debug route to your server.js
-app.get('/debug-db', async (req, res) => {
-  try {
-    const result = await db.query('SELECT 1+1 AS test'); // Simple test query
-    res.send(`DB Connection OK. Test result: ${result.rows[0].test}`);
-  } catch (err) {
-    res.status(500).send(`DB Connection FAILED: ${err.message}`);
-  }
-});
-
 // Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -74,6 +57,7 @@ const connectDB = async () => {
         process.exit(1);
     }
 };
+
 // Models
 const Admin = require('./models/Admin');
 const Announcement = require('./models/Announcement');
