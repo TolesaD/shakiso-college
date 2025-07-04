@@ -57,6 +57,15 @@ const connectDB = async () => {
         process.exit(1);
     }
 };
+// Add this debug route to your server.js
+app.get('/debug-db', async (req, res) => {
+  try {
+    const result = await db.query('SELECT 1+1 AS test'); // Simple test query
+    res.send(`DB Connection OK. Test result: ${result.rows[0].test}`);
+  } catch (err) {
+    res.status(500).send(`DB Connection FAILED: ${err.message}`);
+  }
+});
 
 // Models
 const Admin = require('./models/Admin');
