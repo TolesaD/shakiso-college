@@ -1,15 +1,45 @@
-// Mobile menu toggle
+// Mobile menu toggle - Enhanced version
 document.addEventListener('DOMContentLoaded', function() {
+    // ======================
+    // Enhanced Mobile Menu
+    // ======================
     const hamburger = document.querySelector('.hamburger');
     const navLinks = document.querySelector('.nav-links');
+    const navOverlay = document.createElement('div');
     
     if (hamburger && navLinks) {
-        hamburger.addEventListener('click', function() {
+        // Create overlay element
+        navOverlay.className = 'nav-overlay';
+        document.body.appendChild(navOverlay);
+
+        // Toggle menu function
+        function toggleMenu() {
+            hamburger.classList.toggle('active');
             navLinks.classList.toggle('active');
+            navOverlay.classList.toggle('active');
+            document.body.style.overflow = 
+                navLinks.classList.contains('active') ? 'hidden' : '';
+        }
+
+        // Hamburger click event
+        hamburger.addEventListener('click', toggleMenu);
+
+        // Overlay click event
+        navOverlay.addEventListener('click', toggleMenu);
+
+        // Close menu when clicking a link
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (navLinks.classList.contains('active')) {
+                    toggleMenu();
+                }
+            });
         });
     }
 
-    // Image gallery lightbox
+    // ======================
+    // Existing Lightbox Code
+    // ======================
     const galleryItems = document.querySelectorAll('.gallery-item');
     const lightbox = document.createElement('div');
     lightbox.id = 'lightbox';
@@ -30,7 +60,9 @@ document.addEventListener('DOMContentLoaded', function() {
         lightbox.classList.remove('active');
     });
 
-    // Contact form validation
+    // ======================
+    // Existing Form Validation
+    // ======================
     const contactForm = document.getElementById('contactForm');
     if (contactForm) {
         contactForm.addEventListener('submit', function(e) {
