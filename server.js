@@ -401,6 +401,19 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+// Auto-create admin if missing
+const initAdmin = async () => {
+  if (!await Admin.exists({ username: process.env.ADMIN_USERNAME })) {
+    const admin = new Admin({
+      username: process.env.ADMIN_USERNAME,
+      password: process.env.ADMIN_PASSWORD // Auto-hashed by schema
+    });
+    await admin.save();
+    console.log("Initial admin created");
+  }
+};
+initAdmin();
+
 // ANNOUNCEMENTS ROUTES
 // ======================
 
