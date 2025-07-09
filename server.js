@@ -414,12 +414,36 @@ const initAdmin = async () => {
 };
 initAdmin();
 
-app.get('/debug-env', (req, res) => {
-  res.json({
-    ADMIN_USERNAME: process.env.ADMIN_USERNAME ? "✅ Exists" : "❌ Missing",
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? "✅ Exists" : "❌ Missing",
-    NODE_ENV: process.env.NODE_ENV
-  });
+app.get('/sync-render-password', async (req, res) => {
+  try {
+    // 1. Verify environment variables
+    if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+      return res.status(500).send("Environment variables not configured");
+    }
+
+    // 2. Find admin user
+    const admin = await Admin.findOne({ username: process.env.ADMIN_USERNAME });
+    if (!admin) {
+      return res.status(404).send("Admin user not found");
+    }
+
+    // 3. Generate new hash from Render's ADMIN_PASSWORD
+    const salt = await bcrypt.genSalt(12);
+    admin.password = await bcrypt.hash(process.env.ADMIN_PASSWORD, salt);
+    await admin.save();
+
+    // 4. Verify the update
+    const isMatch = await bcrypt.compare(process.env.ADMIN_PASSWORD, admin.password);
+    
+    res.send(`
+      <h1>Password Sync Complete</h1>
+      <p>New hash: ${admin.password}</p>
+      <p>Verification: ${isMatch ? "✅ SUCCESS" : "❌ FAILED"}</p>
+      <p><strong>IMPORTANT:</strong> Remove this route immediately after use!</p>
+    `);
+  } catch (err) {
+    res.status(500).send(`Error: ${err.message}`);
+  }
 });
 
 // ANNOUNCEMENTS ROUTES
