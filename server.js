@@ -414,6 +414,14 @@ const initAdmin = async () => {
 };
 initAdmin();
 
+app.get('/debug-env', (req, res) => {
+  res.json({
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME ? "✅ Exists" : "❌ Missing",
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? "✅ Exists" : "❌ Missing",
+    NODE_ENV: process.env.NODE_ENV
+  });
+});
+
 // ANNOUNCEMENTS ROUTES
 // ======================
 
