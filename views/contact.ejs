@@ -87,12 +87,24 @@
             margin-bottom: 1.5rem;
             color: #2c3e50;
         }
+        .hero {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/contact-bg.jpg');
+            background-size: cover;
+            background-position: center;
+            color: white;
+            padding: 5rem 0;
+            text-align: center;
+        }
+        .hero-content h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
     <%- include('partials/header', {user}) %>
     
-    <section class="hero" style="background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/contact-bg.jpg');">
+    <section class="hero">
         <div class="container">
             <div class="hero-content">
                 <h1>Contact Us</h1>
@@ -101,33 +113,11 @@
         </div>
     </section>
 
-<<<<<<< HEAD
-    <section class="section">
-        <div class="container">
-            <div class="contact-info">
-                <div class="contact-card">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <h3>Address</h3>
-                    <p>Shakiso City Administration, Oromia Region, Ethiopia</p>
-                </div>
-                <div class="contact-card">
-                    <i class="fas fa-phone"></i>
-                    <h3>Phone</h3>
-                    <p>046 334 0477</p>
-                    <p>046 334 0455</p>
-                </div>
-                <div class="contact-card">
-                    <i class="fas fa-envelope"></i>
-                    <h3>Email</h3>
-                    <p>shakisopolytechniccollege2004@gmail.com</p>
-                </div>
-=======
     <main class="contact-container">
         <!-- Flash Messages -->
         <% if (messages.error) { %>
             <div class="alert alert-error">
                 <i class="fas fa-exclamation-circle"></i> <%= messages.error %>
->>>>>>> 56a04ccaaf71f8d6c50b1b7419660d9c0d77c032
             </div>
         <% } %>
         <% if (messages.success) { %>
@@ -139,19 +129,18 @@
         <div class="contact-grid">
             <div class="contact-card">
                 <i class="fas fa-map-marker-alt"></i>
-                <h3>Our Location</h3>
-                <p>Shakiso City Administration</p>
-                <p>Oromia Region, Ethiopia</p>
+                <h3>Address</h3>
+                <p>Shakiso City Administration, Oromia Region, Ethiopia</p>
             </div>
             <div class="contact-card">
                 <i class="fas fa-phone"></i>
-                <h3>Call Us</h3>
-                <p>+251 46 334 0477</p>
-                <p>+251 46 334 0455</p>
+                <h3>Phone</h3>
+                <p>046 334 0477</p>
+                <p>046 334 0455</p>
             </div>
             <div class="contact-card">
                 <i class="fas fa-envelope"></i>
-                <h3>Email Us</h3>
+                <h3>Email</h3>
                 <p>shakisopolytechniccollege2004@gmail.com</p>
             </div>
         </div>
