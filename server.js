@@ -22,19 +22,23 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(methodOverride('_method'));
 
-// Session configuration
+// Modified session configuration without encryption
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000,
-        httpOnly: true
+        httpOnly: true,
+        sameSite: 'strict'
     },
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI,
-        ttl: 24 * 60 * 60
+        ttl: 14 * 24 * 60 * 60,
+        autoRemove: 'native'
+        // Removed the crypto configuration
     })
 }));
 
@@ -130,15 +134,22 @@ app.use((req, res, next) => {
 });
 
 // ======================
-// AUTHENTICATION MIDDLEWARE
+// ENHANCED AUTHENTICATION MIDDLEWARE
 // ======================
 
 function ensureAuthenticated(req, res, next) {
+    // Check for active session
     if (req.session.user && req.session.user.role === 'admin') {
+        // Refresh session expiration on each request
+        req.session.touch();
         return next();
     }
-    req.flash('error', 'Please login to access this page');
-    res.redirect('/admin/login');
+    
+    // Clear any invalid session data
+    req.session.destroy(() => {
+        req.flash('error', 'Session expired or unauthorized access');
+        return res.redirect('/admin/login');
+    });
 }
 
 // ======================
@@ -229,13 +240,22 @@ app.get('/videos', async (req, res) => {
 // ADMIN ROUTES
 // ======================
 
-// Admin Login Routes 
+// ======================
+// ======================
+// ADMIN LOGIN ROUTES
+// ======================
+
 app.get('/admin/login', (req, res) => {
+    // Check for both session user and logout success message
     if (req.session.user) {
         return res.redirect('/admin/dashboard');
     }
+    
     res.render('admin/login', { 
         error: req.flash('error'),
+        success: req.query.logout === 'success' 
+            ? ['You have been logged out successfully'] 
+            : req.flash('success'),
         username: req.flash('username')
     });
 });
@@ -269,6 +289,76 @@ app.post('/admin/login', async (req, res) => {
     } catch (err) {
         console.error('Login error:', err);
         req.flash('error', 'An error occurred during login');
+        res.redirect('/admin/login');
+    }
+});
+
+// ======================
+// ADMIN LOGOUT ROUTE
+// ======================
+
+app.get('/admin/logout', (req, res) => {
+    // Store user info for logging before destroying session
+    const user = req.session.user ? {...req.session.user} : null;
+    
+    // Create a clean redirect function that won't touch session
+    const safeRedirect = (url) => {
+        res.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.header('Pragma', 'no-cache');
+        res.header('Expires', '0');
+        res.status(302).location(url).end();
+    };
+
+    // Destroy session
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Session destruction error:', err);
+            // Continue with logout even if destruction fails
+        }
+
+        // Clear session cookie from all paths
+        res.clearCookie('connect.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        // Log the logout
+        if (user) {
+            console.log(`Admin ${user.username} logged out at ${new Date()}`);
+        }
+
+        // Redirect with success message via query parameter
+        safeRedirect('/admin/login?logout=success');
+    });
+});
+
+// ======================
+// SESSION VERIFICATION MIDDLEWARE
+// ======================
+
+app.use('/admin*', (req, res, next) => {
+    // Skip session verification for login page and static assets
+    if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
+        return next();
+    }
+    
+    // Verify session exists in store
+    if (req.sessionID) {
+        req.sessionStore.get(req.sessionID, (err, session) => {
+            if (err || !session) {
+                // Session not found in store
+                req.session.destroy(() => {
+                    res.clearCookie('connect.sid');
+                    return res.redirect('/admin/login');
+                });
+            } else {
+                // Session exists, continue
+                next();
+            }
+        });
+    } else {
+        // No session ID present
         res.redirect('/admin/login');
     }
 });
