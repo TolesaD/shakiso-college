@@ -9,6 +9,7 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const multer = require('multer');
 const path = require('path');
+const bodyParser = require('body-parser');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
 
@@ -824,6 +825,38 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
     }
 });
 
+// Add this with your other routes in server.js
+app.post('/contact', async (req, res) => {
+    try {
+        const { name, email, subject, message } = req.body;
+        
+        // Basic validation
+        if (!name || !email || !subject || !message) {
+            req.flash('error', 'All fields are required');
+            return res.redirect('/contact');
+        }
+
+        // Log the form submission (for debugging)
+        console.log('New contact form submission:', {
+            name,
+            email,
+            subject,
+            message,
+            date: new Date()
+        });
+
+        // Here you would typically:
+        // 1. Save to database (create a Contact model)
+        // 2. Or send an email (using nodemailer)
+        
+        req.flash('success', 'Thank you for your message! We will contact you soon.');
+        res.redirect('/contact');
+    } catch (err) {
+        console.error('Contact form error:', err);
+        req.flash('error', 'Failed to send your message. Please try again later.');
+        res.redirect('/contact');
+    }
+});
 // ======================
 // SERVER INITIALIZATION
 // ======================
