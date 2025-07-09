@@ -94,6 +94,7 @@ header {
     align-items: center;
     text-align: center;
     color: var(--white);
+     background-size: 40%; /* Adjust size as needed */
 }
 
 .hero-content {
