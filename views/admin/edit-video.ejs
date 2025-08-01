@@ -170,8 +170,6 @@
 
             <form method="POST" action="<%= video ? '/admin/videos/' + video._id + '?_method=PUT' : '/admin/videos' %>" enctype="multipart/form-data">
                 <!-- Required CSRF Protection -->
-                <input type="text">
-                
                 <% if (video) { %>
                 <div class="form-group">
                     <label>Current Video</label>

@@ -104,29 +104,6 @@
                     <label for="content">Content *</label>
                     <textarea id="content" name="content" class="form-control" rows="5" required><%= announcement ? announcement.content : '' %></textarea>
                 </div>
-                <!-- Media Section -->
-                <fieldset class="form-group">
-                    <legend>Media Information</legend>
-                    
-                    <div class="form-group">
-                        <label for="mediaUrl">Media URL (optional)</label>
-                        <input type="url" id="mediaUrl" name="mediaUrl" class="form-control" 
-                               value="<%= announcement && announcement.media ? announcement.media.url : '' %>"
-                               placeholder="https://example.com/image.jpg or YouTube link">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="mediaTitle">Media Title (optional)</label>
-                        <input type="text" id="mediaTitle" name="mediaTitle" class="form-control" 
-                               value="<%= announcement && announcement.media ? announcement.media.title : '' %>">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="mediaDescription">Media Description (optional)</label>
-                        <textarea id="mediaDescription" name="mediaDescription" class="form-control" rows="3"><%= announcement && announcement.media ? announcement.media.description : '' %></textarea>
-                    </div>
-                </fieldset>
-
                 <!-- Status Toggle -->
                 <% if (announcement) { %>
                 <div class="form-group">
