@@ -5,11 +5,25 @@ const AdminSchema = new mongoose.Schema({
     username: {
         type: String,
         required: true,
+        unique: true,
+        lowercase: true
+    },
+    email: {
+        type: String,
+        required: true,
         unique: true
     },
     password: {
         type: String,
         required: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
     }
 });
 
@@ -18,4 +32,4 @@ AdminSchema.methods.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('Admin', AdminSchema);
+module.exports = mongoose.model('Admin', AdminSchema, 'admins');
