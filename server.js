@@ -15,6 +15,9 @@ const app = express();
 // Load environment variables
 require('dotenv').config();
 console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD || 'undefined');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
+console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
@@ -23,22 +26,33 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(methodOverride('_method'));
 
 // Session configuration
+const sessionStore = MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60,
+    autoRemove: 'native'
+});
+
+sessionStore.on('error', (err) => {
+    console.error('Session store error:', err);
+});
+
+sessionStore.on('connected', () => {
+    console.log('Session store connected to MongoDB');
+});
+
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
     rolling: true,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // Secure cookies in production
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: 'strict' // Strict for production security
+        sameSite: 'strict'
     },
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI,
-        ttl: 14 * 24 * 60 * 60,
-        autoRemove: 'native'
-    })
+    store: sessionStore
 }));
 
 // Flash messages
@@ -141,7 +155,8 @@ function ensureAuthenticated(req, res, next) {
         return next();
     }
     console.log('Session invalid, destroying session');
-    req.session.destroy(() => {
+    req.session.destroy((err) => {
+        if (err) console.error('Session destroy error:', err);
         req.flash('error', 'Session expired or unauthorized access');
         return res.redirect('/admin/login');
     });
@@ -270,8 +285,17 @@ app.post('/admin/login', async (req, res) => {
         };
         console.log(`Session created: { id: '${admin._id}', username: '${admin.username}', role: 'admin' }`);
         
-        req.flash('success', 'Logged in successfully');
-        res.redirect('/admin/dashboard');
+        // Ensure session is saved
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                req.flash('error', 'Failed to save session');
+                return res.redirect('/admin/login');
+            }
+            console.log('Session saved successfully');
+            req.flash('success', 'Logged in successfully');
+            res.redirect('/admin/dashboard');
+        });
     } catch (err) {
         console.error('Login error:', err);
         req.flash('error', 'An error occurred during login');
@@ -298,7 +322,7 @@ app.get('/admin/logout', (req, res) => {
         res.clearCookie('connect.sid', {
             path: '/',
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production' // Secure in production
+            secure: process.env.NODE_ENV === 'production'
         });
 
         if (user) {
@@ -320,11 +344,13 @@ app.use('/admin*', (req, res, next) => {
             console.log('Session store check:', { sessionID: req.sessionID, sessionExists: !!session, error: err });
             if (err || !session) {
                 console.log('Session not found in store, redirecting to login');
-                req.session.destroy(() => {
+                req.session.destroy((destroyErr) => {
+                    if (destroyErr) console.error('Session destroy error:', destroyErr);
                     res.clearCookie('connect.sid');
                     return res.redirect('/admin/login');
                 });
             } else {
+                console.log('Session found:', session);
                 next();
             }
         });
