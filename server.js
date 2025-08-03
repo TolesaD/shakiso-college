@@ -1,6 +1,3 @@
-// Suppress deprecation warnings
-process.removeAllListeners('warning');
-require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const MongoStore = require('connect-mongo');
@@ -9,12 +6,15 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const multer = require('multer');
 const path = require('path');
-const bodyParser = require('body-parser');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
 
 // Initialize Express app
 const app = express();
+
+// Load environment variables
+require('dotenv').config();
+console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD || 'undefined');
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
@@ -22,23 +22,22 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(methodOverride('_method'));
 
-// Modified session configuration without encryption
+// Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
     rolling: true,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production', // Secure cookies in production
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: 'strict'
+        sameSite: 'strict' // Strict for production security
     },
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI,
         ttl: 14 * 24 * 60 * 60,
         autoRemove: 'native'
-        // Removed the crypto configuration
     })
 }));
 
@@ -71,56 +70,56 @@ const Video = require('./models/Video');
 
 // Configure image upload
 const imageStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'public/uploads/images');
-    await fs.mkdir(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+    destination: async (req, file, cb) => {
+        const uploadPath = path.join(__dirname, 'public/uploads/images');
+        await fs.mkdir(uploadPath, { recursive: true });
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
 });
 
 const imageFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only images (JPEG, JPG, PNG, GIF) are allowed'), false);
-  }
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only images (JPEG, JPG, PNG, GIF) are allowed'), false);
+    }
 };
 
 const uploadImage = multer({
-  storage: imageStorage,
-  fileFilter: imageFilter,
-  limits: { fileSize: 2048 * 1024 * 1024 } // 5MB
+    storage: imageStorage,
+    fileFilter: imageFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
 // Configure video upload
 const videoStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'public/uploads/videos');
-    await fs.mkdir(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+    destination: async (req, file, cb) => {
+        const uploadPath = path.join(__dirname, 'public/uploads/videos');
+        await fs.mkdir(uploadPath, { recursive: true });
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
 });
 
 const videoFilter = (req, file, cb) => {
-  const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only videos (MP4, WebM, OGG) are allowed'), false);
-  }
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only videos (MP4, WebM, OGG) are allowed'), false);
+    }
 };
 
 const uploadVideo = multer({
-  storage: videoStorage,
-  fileFilter: videoFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+    storage: videoStorage,
+    fileFilter: videoFilter,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
 
 // Set EJS as view engine
@@ -133,40 +132,31 @@ app.use((req, res, next) => {
     next();
 });
 
-// ======================
-// ENHANCED AUTHENTICATION MIDDLEWARE
-// ======================
-
+// Authentication middleware
 function ensureAuthenticated(req, res, next) {
-    // Check for active session
+    console.log('Checking session:', req.sessionID, req.session.user);
     if (req.session.user && req.session.user.role === 'admin') {
-        // Refresh session expiration on each request
         req.session.touch();
+        console.log('Session valid, proceeding to next middleware');
         return next();
     }
-    
-    // Clear any invalid session data
+    console.log('Session invalid, destroying session');
     req.session.destroy(() => {
         req.flash('error', 'Session expired or unauthorized access');
         return res.redirect('/admin/login');
     });
 }
 
-// ======================
-// ERROR HANDLING MIDDLEWARE
-// ======================
+// Error handling middleware for Multer
 app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    req.flash('error', err.message);
-    return res.redirect('back');
-  }
-  next(err);
+    if (err instanceof multer.MulterError) {
+        req.flash('error', err.message);
+        return res.redirect('back');
+    }
+    next(err);
 });
 
-// ======================
-// FRONTEND ROUTES
-// ======================
-
+// Frontend Routes
 app.get('/', async (req, res) => {
     try {
         const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(5);
@@ -236,17 +226,8 @@ app.get('/videos', async (req, res) => {
     }
 });
 
-// ======================
-// ADMIN ROUTES
-// ======================
-
-// ======================
-// ======================
-// ADMIN LOGIN ROUTES
-// ======================
-
+// Admin Login Routes
 app.get('/admin/login', (req, res) => {
-    // Check for both session user and logout success message
     if (req.session.user) {
         return res.redirect('/admin/dashboard');
     }
@@ -263,16 +244,20 @@ app.get('/admin/login', (req, res) => {
 app.post('/admin/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const admin = await Admin.findOne({ username });
+        console.log(`Login attempt: { username: '${username}', timestamp: ${new Date().toISOString()} }`);
         
+        const admin = await Admin.findOne({ username });
         if (!admin) {
+            console.log(`User not found: ${username}`);
             req.flash('error', 'Invalid credentials');
             req.flash('username', username);
             return res.redirect('/admin/login');
         }
         
-        const isMatch = await bcrypt.compare(password, admin.password);
+        const isMatch = await admin.comparePassword(password);
+        console.log(`Password match: ${isMatch}`);
         if (!isMatch) {
+            console.log(`Password mismatch for user: ${username}`);
             req.flash('error', 'Invalid credentials');
             req.flash('username', username);
             return res.redirect('/admin/login');
@@ -283,6 +268,7 @@ app.post('/admin/login', async (req, res) => {
             username: admin.username,
             role: 'admin'
         };
+        console.log(`Session created: { id: '${admin._id}', username: '${admin.username}', role: 'admin' }`);
         
         req.flash('success', 'Logged in successfully');
         res.redirect('/admin/dashboard');
@@ -293,15 +279,10 @@ app.post('/admin/login', async (req, res) => {
     }
 });
 
-// ======================
-// ADMIN LOGOUT ROUTE
-// ======================
-
+// Admin Logout Route
 app.get('/admin/logout', (req, res) => {
-    // Store user info for logging before destroying session
     const user = req.session.user ? {...req.session.user} : null;
     
-    // Create a clean redirect function that won't touch session
     const safeRedirect = (url) => {
         res.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         res.header('Pragma', 'no-cache');
@@ -309,56 +290,46 @@ app.get('/admin/logout', (req, res) => {
         res.status(302).location(url).end();
     };
 
-    // Destroy session
     req.session.destroy((err) => {
         if (err) {
             console.error('Session destruction error:', err);
-            // Continue with logout even if destruction fails
         }
 
-        // Clear session cookie from all paths
         res.clearCookie('connect.sid', {
             path: '/',
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production'
+            secure: process.env.NODE_ENV === 'production' // Secure in production
         });
 
-        // Log the logout
         if (user) {
             console.log(`Admin ${user.username} logged out at ${new Date()}`);
         }
 
-        // Redirect with success message via query parameter
         safeRedirect('/admin/login?logout=success');
     });
 });
 
-// ======================
-// SESSION VERIFICATION MIDDLEWARE
-// ======================
-
+// Session Verification Middleware
 app.use('/admin*', (req, res, next) => {
-    // Skip session verification for login page and static assets
     if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
         return next();
     }
     
-    // Verify session exists in store
     if (req.sessionID) {
         req.sessionStore.get(req.sessionID, (err, session) => {
+            console.log('Session store check:', { sessionID: req.sessionID, sessionExists: !!session, error: err });
             if (err || !session) {
-                // Session not found in store
+                console.log('Session not found in store, redirecting to login');
                 req.session.destroy(() => {
                     res.clearCookie('connect.sid');
                     return res.redirect('/admin/login');
                 });
             } else {
-                // Session exists, continue
                 next();
             }
         });
     } else {
-        // No session ID present
+        console.log('No session ID, redirecting to login');
         res.redirect('/admin/login');
     }
 });
@@ -389,9 +360,10 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
     }
 });
 
+// Announcements Routes
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'public/uploads/announcements/'); // Adjust path as needed
+        cb(null, 'public/uploads/announcements/');
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -401,55 +373,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Auto-create admin if missing
-const initAdmin = async () => {
-  if (!await Admin.exists({ username: process.env.ADMIN_USERNAME })) {
-    const admin = new Admin({
-      username: process.env.ADMIN_USERNAME,
-      password: process.env.ADMIN_PASSWORD // Auto-hashed by schema
-    });
-    await admin.save();
-    console.log("Initial admin created");
-  }
-};
-initAdmin();
-
-app.get('/sync-render-password', async (req, res) => {
-  try {
-    // 1. Verify environment variables
-    if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-      return res.status(500).send("Environment variables not configured");
-    }
-
-    // 2. Find admin user
-    const admin = await Admin.findOne({ username: process.env.ADMIN_USERNAME });
-    if (!admin) {
-      return res.status(404).send("Admin user not found");
-    }
-
-    // 3. Generate new hash from Render's ADMIN_PASSWORD
-    const salt = await bcrypt.genSalt(12);
-    admin.password = await bcrypt.hash(process.env.ADMIN_PASSWORD, salt);
-    await admin.save();
-
-    // 4. Verify the update
-    const isMatch = await bcrypt.compare(process.env.ADMIN_PASSWORD, admin.password);
-    
-    res.send(`
-      <h1>Password Sync Complete</h1>
-      <p>New hash: ${admin.password}</p>
-      <p>Verification: ${isMatch ? "✅ SUCCESS" : "❌ FAILED"}</p>
-      <p><strong>IMPORTANT:</strong> Remove this route immediately after use!</p>
-    `);
-  } catch (err) {
-    res.status(500).send(`Error: ${err.message}`);
-  }
-});
-
-// ANNOUNCEMENTS ROUTES
-// ======================
-
-// List announcements
+// List Announcements
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
     try {
         const announcements = await Announcement.find().sort({ createdAt: -1 });
@@ -469,7 +393,7 @@ app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
 });
 
 // New Announcement Form
-app.get('/admin/announcements', ensureAuthenticated, (req, res) => {
+app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
     res.render('admin/edit-announcement', {
         announcement: null,
         user: req.session.user,
@@ -505,6 +429,7 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
         const newAnnouncement = new Announcement({ 
             title, 
             content,
+            isActive: isActive === 'on',
             media: {
                 title: mediaTitle,
                 description: mediaDescription,
@@ -522,18 +447,15 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
         req.flash('error', err instanceof mongoose.Error.ValidationError 
             ? Object.values(err.errors).map(e => e.message).join(', ')
             : 'Failed to create announcement');
-        res.redirect('/admin/announcements');
+        res.redirect('/admin/announcements/new');
     }
 });
 
-// Public route for all users to view announcements
+// Public Announcements Route
 app.get('/announcements', async (req, res) => {
     try {
-        const announcements = await Announcement.find({ 
-            isActive: true  // Only show active announcements
-        }).sort({ createdAt: -1 });
-
-        res.render('announcements', {  // Will create this template next
+        const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
+        res.render('announcements', { 
             announcements,
             currentRoute: 'announcements'
         });
@@ -574,38 +496,21 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Delete Announcement - Updated Route
+// Delete Announcement
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     try {
         const announcement = await Announcement.findByIdAndDelete(req.params.id);
-        
         if (!announcement) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Announcement not found' 
-            });
+            return res.status(404).json({ success: false, message: 'Announcement not found' });
         }
-
-        // Return JSON response
-        return res.json({ 
-            success: true,
-            message: 'Announcement deleted successfully'
-        });
-
+        return res.json({ success: true, message: 'Announcement deleted successfully' });
     } catch (err) {
         console.error('Delete announcement error:', err);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Failed to delete announcement' 
-        });
+        return res.status(500).json({ success: false, message: 'Failed to delete announcement' });
     }
 });
 
-// ======================
-// PHOTOS ROUTES
-// ======================
-
-// List photos
+// Photos Routes
 app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
     try {
         const photos = await Photo.find().sort({ createdAt: -1 });
@@ -624,10 +529,7 @@ app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
     }
 });
 
-//Photo Route
-
-// New Photo Form
-app.get('/admin/photos', ensureAuthenticated, (req, res) => {
+app.get('/admin/photos/new', ensureAuthenticated, (req, res) => {
     res.render('admin/edit-photo', {
         photo: null,
         user: req.session.user,
@@ -635,7 +537,6 @@ app.get('/admin/photos', ensureAuthenticated, (req, res) => {
     });
 });
 
-// Edit Photo Form
 app.get('/admin/photos/:id/edit', ensureAuthenticated, async (req, res) => {
     try {
         const photo = await Photo.findById(req.params.id);
@@ -655,7 +556,6 @@ app.get('/admin/photos/:id/edit', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Create Photo
 app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
     try {
         if (!req.file) {
@@ -677,12 +577,10 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
         res.redirect('/admin/photos');
     } catch (err) {
         console.error('Photo upload error:', err);
-        
         if (req.file) {
             fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename))
                 .catch(unlinkErr => console.error('Failed to delete uploaded file:', unlinkErr));
         }
-        
         req.flash('error', err instanceof mongoose.Error.ValidationError 
             ? Object.values(err.errors).map(e => e.message).join(', ')
             : 'Failed to upload photo');
@@ -690,7 +588,6 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     }
 });
 
-// Update Photo
 app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
     try {
         const { title, description, isFeatured } = req.body;
@@ -729,22 +626,16 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     }
 });
 
-// Delete Photo - Optimized Version
 app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
     try {
-        // First get the photo details
         const photo = await Photo.findById(req.params.id);
         if (!photo) {
             return res.status(404).json({ success: false, message: 'Photo not found' });
         }
 
-        // Store the file path
         const filePath = photo.imageUrl ? path.join(__dirname, 'public', photo.imageUrl) : null;
-
-        // Delete from database first
         await Photo.findByIdAndDelete(req.params.id);
 
-        // Then delete the file if it exists
         let fileDeleted = false;
         if (filePath && fs.existsSync(filePath)) {
             try {
@@ -752,17 +643,14 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
                 fileDeleted = true;
             } catch (unlinkErr) {
                 console.error('File deletion error:', unlinkErr);
-                // Continue even if file deletion fails
             }
         }
 
-        // Return JSON response for AJAX calls
         return res.json({ 
             success: true,
             message: 'Photo deleted successfully',
             fileDeleted: fileDeleted
         });
-
     } catch (err) {
         console.error('Delete photo error:', err);
         return res.status(500).json({ 
@@ -772,11 +660,7 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// ======================
-// VIDEOS ROUTES
-// ======================
-
-// List videos
+// Videos Routes
 app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
     try {
         const videos = await Video.find().sort({ createdAt: -1 });
@@ -795,7 +679,6 @@ app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// New Video Form
 app.get('/admin/videos/new', ensureAuthenticated, (req, res) => {
     res.render('admin/edit-video', {
         video: null,
@@ -804,7 +687,6 @@ app.get('/admin/videos/new', ensureAuthenticated, (req, res) => {
     });
 });
 
-// Edit Video Form
 app.get('/admin/videos/:id/edit', ensureAuthenticated, async (req, res) => {
     try {
         const video = await Video.findById(req.params.id);
@@ -824,7 +706,6 @@ app.get('/admin/videos/:id/edit', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Create Video
 app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
     try {
         const { title, description, isFeatured, source, youtubeUrl } = req.body;
@@ -875,7 +756,6 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
     }
 });
 
-// Update Video
 app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
     try {
         const { title, description, isFeatured, source, youtubeUrl } = req.body;
@@ -940,7 +820,6 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
     }
 });
 
-// Delete Video
 app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
     try {
         const video = await Video.findByIdAndDelete(req.params.id);
@@ -960,18 +839,15 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Add this with your other routes in server.js
 app.post('/contact', async (req, res) => {
     try {
         const { name, email, subject, message } = req.body;
         
-        // Basic validation
         if (!name || !email || !subject || !message) {
             req.flash('error', 'All fields are required');
             return res.redirect('/contact');
         }
 
-        // Log the form submission (for debugging)
         console.log('New contact form submission:', {
             name,
             email,
@@ -980,10 +856,6 @@ app.post('/contact', async (req, res) => {
             date: new Date()
         });
 
-        // Here you would typically:
-        // 1. Save to database (create a Contact model)
-        // 2. Or send an email (using nodemailer)
-        
         req.flash('success', 'Thank you for your message! We will contact you soon.');
         res.redirect('/contact');
     } catch (err) {
@@ -992,29 +864,38 @@ app.post('/contact', async (req, res) => {
         res.redirect('/contact');
     }
 });
-// ======================
-// SERVER INITIALIZATION
-// ======================
 
-// Initialize admin user if not exists
+// Initialize admin user (runs only if no admin exists)
 async function initializeAdmin() {
     try {
+        console.log('Checking admin user...');
+        console.log('ADMIN_USERNAME:', process.env.ADMIN_USERNAME);
+        console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD);
+        console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
+        
         const adminCount = await Admin.countDocuments();
         if (adminCount === 0) {
-            const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
-            const admin = new Admin({
-                username: process.env.ADMIN_USERNAME || 'admin',
-                password: hashedPassword
+            if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_EMAIL) {
+                throw new Error('Missing required environment variables for admin creation');
+            }
+            const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+            await Admin.create({
+                username: process.env.ADMIN_USERNAME,
+                email: process.env.ADMIN_EMAIL,
+                password: hashedPassword,
+                createdAt: new Date(),
+                updatedAt: new Date()
             });
-            await admin.save();
-            console.log('Default admin user created');
+            console.log('Admin user created:', process.env.ADMIN_USERNAME);
+        } else {
+            console.log('Admin user already exists, skipping creation');
         }
     } catch (err) {
         console.error('Error initializing admin:', err);
     }
 }
 
-// Error handling middleware
+// Global Error Handling
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
     res.status(500).render('error', {
@@ -1023,18 +904,18 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server (Updated)
+// Start server
 (async () => {
     try {
         await connectDB();
-        await initializeAdmin();
+        // Temporarily disable initializeAdmin to preserve Compass insertion
+        // await initializeAdmin();
         
         const PORT = process.env.PORT || 1000;
         const server = app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
         
-        // Handle server shutdown gracefully
         process.on('SIGTERM', () => {
             console.log('SIGTERM received. Shutting down gracefully');
             server.close(() => {
