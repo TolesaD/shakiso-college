@@ -8,18 +8,20 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
+const cookieParser = require('cookie-parser');
 
 // Initialize Express app
 const app = express();
 
 // Load environment variables
 require('dotenv').config();
-console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD || 'undefined');
+console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
 
 // Middleware
+app.use(cookieParser()); // Add cookie-parser middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -30,7 +32,13 @@ const sessionStore = MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     collectionName: 'sessions',
     ttl: 14 * 24 * 60 * 60,
-    autoRemove: 'native'
+    autoRemove: 'native',
+    mongoOptions: {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 45000
+    }
 });
 
 sessionStore.on('error', (err) => {
@@ -47,10 +55,10 @@ app.use(session({
     saveUninitialized: false,
     rolling: true,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST ? true : false,
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: 'strict'
+        sameSite: 'lax'
     },
     store: sessionStore
 }));
@@ -142,13 +150,18 @@ app.set('view engine', 'ejs');
 
 // Debugging middleware
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Cookies: ${JSON.stringify(req.cookies)}`);
     next();
 });
 
 // Authentication middleware
 function ensureAuthenticated(req, res, next) {
-    console.log('Checking session:', req.sessionID, req.session.user);
+    console.log('Checking session:', {
+        sessionID: req.sessionID,
+        user: req.session.user,
+        cookies: req.cookies,
+        sessionExists: !!req.session
+    });
     if (req.session.user && req.session.user.role === 'admin') {
         req.session.touch();
         console.log('Session valid, proceeding to next middleware');
@@ -157,8 +170,12 @@ function ensureAuthenticated(req, res, next) {
     console.log('Session invalid, destroying session');
     req.session.destroy((err) => {
         if (err) console.error('Session destroy error:', err);
-        req.flash('error', 'Session expired or unauthorized access');
-        return res.redirect('/admin/login');
+        res.clearCookie('connect.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
+        });
+        res.redirect('/admin/login');
     });
 }
 
@@ -244,6 +261,7 @@ app.get('/videos', async (req, res) => {
 // Admin Login Routes
 app.get('/admin/login', (req, res) => {
     if (req.session.user) {
+        console.log('User already logged in, redirecting to dashboard');
         return res.redirect('/admin/dashboard');
     }
     
@@ -283,18 +301,26 @@ app.post('/admin/login', async (req, res) => {
             username: admin.username,
             role: 'admin'
         };
-        console.log(`Session created: { id: '${admin._id}', username: '${admin.username}', role: 'admin' }`);
+        console.log(`Session created: ${JSON.stringify(req.session.user)} | Session ID: ${req.sessionID}`);
         
-        // Ensure session is saved
+        // Ensure session is saved and verified
         req.session.save((err) => {
             if (err) {
                 console.error('Session save error:', err);
                 req.flash('error', 'Failed to save session');
                 return res.redirect('/admin/login');
             }
-            console.log('Session saved successfully');
-            req.flash('success', 'Logged in successfully');
-            res.redirect('/admin/dashboard');
+            console.log('Session saved successfully. Session ID:', req.sessionID);
+            sessionStore.get(req.sessionID, (err, session) => {
+                if (err || !session) {
+                    console.error('Session not found in store:', err);
+                    req.flash('error', 'Session storage failed');
+                    return res.redirect('/admin/login');
+                }
+                console.log('Session verified in store:', session);
+                req.flash('success', 'Logged in successfully');
+                res.redirect('/admin/dashboard');
+            });
         });
     } catch (err) {
         console.error('Login error:', err);
@@ -322,7 +348,7 @@ app.get('/admin/logout', (req, res) => {
         res.clearCookie('connect.sid', {
             path: '/',
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production'
+            secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
         });
 
         if (user) {
@@ -339,25 +365,34 @@ app.use('/admin*', (req, res, next) => {
         return next();
     }
     
-    if (req.sessionID) {
-        req.sessionStore.get(req.sessionID, (err, session) => {
-            console.log('Session store check:', { sessionID: req.sessionID, sessionExists: !!session, error: err });
-            if (err || !session) {
-                console.log('Session not found in store, redirecting to login');
-                req.session.destroy((destroyErr) => {
-                    if (destroyErr) console.error('Session destroy error:', destroyErr);
-                    res.clearCookie('connect.sid');
-                    return res.redirect('/admin/login');
-                });
-            } else {
-                console.log('Session found:', session);
-                next();
-            }
-        });
-    } else {
-        console.log('No session ID, redirecting to login');
-        res.redirect('/admin/login');
+    if (!req.sessionID || !req.cookies || !req.cookies['connect.sid']) {
+        console.log('No session ID or cookie, redirecting to login');
+        return res.redirect('/admin/login');
     }
+
+    sessionStore.get(req.sessionID, (err, session) => {
+        console.log('Session store check:', { 
+            sessionID: req.sessionID, 
+            sessionExists: !!session, 
+            error: err,
+            cookies: req.cookies
+        });
+        if (err || !session) {
+            console.log('Session not found in store, redirecting to login');
+            req.session.destroy((destroyErr) => {
+                if (destroyErr) console.error('Session destroy error:', destroyErr);
+                res.clearCookie('connect.sid', {
+                    path: '/',
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
+                });
+                res.redirect('/admin/login');
+            });
+        } else {
+            console.log('Session found:', session);
+            next();
+        }
+    });
 });
 
 // Admin Dashboard
@@ -891,13 +926,13 @@ app.post('/contact', async (req, res) => {
     }
 });
 
-// Initialize admin user (runs only if no admin exists)
+// Initialize admin user
 async function initializeAdmin() {
     try {
         console.log('Checking admin user...');
-        console.log('ADMIN_USERNAME:', process.env.ADMIN_USERNAME);
-        console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD);
-        console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
+        console.log('ADMIN_USERNAME:', process.env.ADMIN_USERNAME || 'Not set');
+        console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
+        console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL || 'Not set');
         
         const adminCount = await Admin.countDocuments();
         if (adminCount === 0) {
@@ -918,6 +953,7 @@ async function initializeAdmin() {
         }
     } catch (err) {
         console.error('Error initializing admin:', err);
+        throw err;
     }
 }
 
@@ -934,8 +970,7 @@ app.use((err, req, res, next) => {
 (async () => {
     try {
         await connectDB();
-        // Temporarily disable initializeAdmin to preserve Compass insertion
-        // await initializeAdmin();
+        await initializeAdmin();
         
         const PORT = process.env.PORT || 1000;
         const server = app.listen(PORT, () => {
