@@ -4,11 +4,11 @@ const MongoStore = require('connect-mongo');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const flash = require('connect-flash');
+const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
-const cookieParser = require('cookie-parser');
 
 // Initialize Express app
 const app = express();
@@ -21,7 +21,7 @@ console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
 
 // Middleware
-app.use(cookieParser()); // Add cookie-parser middleware
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -32,13 +32,7 @@ const sessionStore = MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     collectionName: 'sessions',
     ttl: 14 * 24 * 60 * 60,
-    autoRemove: 'native',
-    mongoOptions: {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        serverSelectionTimeoutMS: 30000,
-        socketTimeoutMS: 45000
-    }
+    autoRemove: 'native'
 });
 
 sessionStore.on('error', (err) => {
@@ -55,10 +49,10 @@ app.use(session({
     saveUninitialized: false,
     rolling: true,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST ? true : false,
+        secure: process.env.NODE_ENV === 'production' ? true : false,
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: 'lax'
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Adjusted for production
     },
     store: sessionStore
 }));
@@ -71,12 +65,7 @@ mongoose.set('strictQuery', false);
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 30000,
-            socketTimeoutMS: 45000
-        });
+        await mongoose.connect(process.env.MONGODB_URI);
         console.log('Connected to MongoDB');
     } catch (err) {
         console.error('MongoDB connection error:', err);
@@ -150,7 +139,7 @@ app.set('view engine', 'ejs');
 
 // Debugging middleware
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Cookies: ${JSON.stringify(req.cookies)}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Cookies: ${JSON.stringify(req.cookies)} | Set-Cookie: ${res.get('Set-Cookie') || 'none'}`);
     next();
 });
 
@@ -159,7 +148,7 @@ function ensureAuthenticated(req, res, next) {
     console.log('Checking session:', {
         sessionID: req.sessionID,
         user: req.session.user,
-        cookies: req.cookies,
+        cookies: req.cookies || 'No cookies',
         sessionExists: !!req.session
     });
     if (req.session.user && req.session.user.role === 'admin') {
@@ -173,7 +162,8 @@ function ensureAuthenticated(req, res, next) {
         res.clearCookie('connect.sid', {
             path: '/',
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
+            secure: process.env.NODE_ENV === 'production' ? true : false,
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
         });
         res.redirect('/admin/login');
     });
@@ -348,7 +338,8 @@ app.get('/admin/logout', (req, res) => {
         res.clearCookie('connect.sid', {
             path: '/',
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
+            secure: process.env.NODE_ENV === 'production' ? true : false,
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
         });
 
         if (user) {
@@ -366,7 +357,7 @@ app.use('/admin*', (req, res, next) => {
     }
     
     if (!req.sessionID || !req.cookies || !req.cookies['connect.sid']) {
-        console.log('No session ID or cookie, redirecting to login');
+        console.log('No session ID or connect.sid cookie, redirecting to login');
         return res.redirect('/admin/login');
     }
 
@@ -384,7 +375,8 @@ app.use('/admin*', (req, res, next) => {
                 res.clearCookie('connect.sid', {
                     path: '/',
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production' && !process.env.LOCALHOST
+                    secure: process.env.NODE_ENV === 'production' ? true : false,
+                    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
                 });
                 res.redirect('/admin/login');
             });
@@ -991,4 +983,4 @@ app.use((err, req, res, next) => {
         console.error('Server startup error:', err);
         process.exit(1);
     }
-})();
+})();n
