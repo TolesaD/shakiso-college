@@ -89,6 +89,13 @@
                         <div class="announcement-item">
                             <h3><%= announcement.title %></h3>
                             <p><%= announcement.content %></p>
+                            <% if (announcement.media && announcement.media.url) { %>
+                                <% if (announcement.media.type === 'image') { %>
+                                    <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || announcement.title %>">
+                                <% } else if (announcement.media.type === 'video') { %>
+                                    <iframe src="<%= announcement.media.url %>" frameborder="0" allowfullscreen></iframe>
+                                <% } %>
+                            <% } %>
                             <span class="date"><%= announcement.createdAt.toLocaleDateString() %></span>
                         </div>
                     <% }) %>
@@ -96,7 +103,7 @@
                     <p>No announcements available.</p>
                 <% } %>
             </div>
-            <a href="/about" class="btn">View All Announcements</a>
+            <a href="/announcements" class="btn">View All Announcements</a>
         </div>
     </section>
 
@@ -107,7 +114,7 @@
                 <% if (photos.length > 0) { %>
                     <% photos.forEach(photo => { %>
                         <div class="gallery-item">
-                            <img src="<%= photo.imagePath %>" alt="<%= photo.title %>">
+                            <img src="<%= photo.imageUrl %>" alt="<%= photo.title %>">
                             <div class="overlay">
                                 <h3><%= photo.title %></h3>
                             </div>
@@ -129,11 +136,11 @@
                     <% videos.forEach(video => { %>
                         <div class="video-card">
                             <div class="video-container">
-                                <% if (video.isYoutube) { %>
-                                    <iframe src="<%= video.videoPath %>" frameborder="0" allowfullscreen></iframe>
+                                <% if (video.source === 'youtube') { %>
+                                    <iframe src="<%= video.videoUrl %>" frameborder="0" allowfullscreen></iframe>
                                 <% } else { %>
                                     <video controls>
-                                        <source src="<%= video.videoPath %>" type="video/mp4">
+                                        <source src="<%= video.videoUrl %>" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 <% } %>

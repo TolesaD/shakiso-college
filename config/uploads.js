@@ -2,10 +2,14 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 
+const uploadBasePath = process.env.NODE_ENV === 'production' 
+  ? '/opt/render/project/src/public/uploads' 
+  : path.join(__dirname, '../public/uploads');
+
 // Configure storage for uploaded images
 const imageStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../public/uploads/images');
+    const uploadPath = path.join(uploadBasePath, 'images');
     await fs.mkdir(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -17,7 +21,7 @@ const imageStorage = multer.diskStorage({
 // Configure storage for uploaded videos
 const videoStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../public/uploads/videos');
+    const uploadPath = path.join(uploadBasePath, 'videos');
     await fs.mkdir(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -52,7 +56,6 @@ module.exports = {
     fileFilter: imageFilter,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB
   }),
-
   uploadVideo: multer({
     storage: videoStorage,
     fileFilter: videoFilter,

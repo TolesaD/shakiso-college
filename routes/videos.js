@@ -4,15 +4,13 @@ const { ensureAuthenticated } = require('../middlewares/auth');
 const Video = require('../models/Video');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 
 // Configure storage for uploaded videos
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: async (req, file, cb) => {
     const uploadPath = path.join(__dirname, '../../public/uploads/videos');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
+    await fs.mkdir(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
@@ -21,27 +19,28 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const fileFilter = (req, file, cb) => {
+  const filetypes = /mp4|webm|ogg/;
+  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = filetypes.test(file.mimetype);
+  if (mimetype && extname) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only videos (mp4, webm, ogg) are allowed'), false);
+  }
+};
+
+const upload = multer({
   storage: storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
-  fileFilter: (req, file, cb) => {
-    const filetypes = /mp4|webm|ogg/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb('Error: Videos only (mp4, webm, ogg)!');
-    }
-  }
+  fileFilter: fileFilter
 });
 
-// Get all videos
+// Get all videos (public API)
 router.get('/', async (req, res) => {
   try {
     const videos = await Video.find()
-      .sort({ uploadedAt: -1 })
+      .sort({ createdAt: -1 })
       .limit(6)
       .populate('uploadedBy', 'username');
     res.json(videos);
@@ -55,11 +54,15 @@ router.get('/', async (req, res) => {
 router.get('/admin', ensureAuthenticated, async (req, res) => {
   try {
     const videos = await Video.find()
-      .sort({ uploadedAt: -1 })
+      .sort({ createdAt: -1 })
       .populate('uploadedBy', 'username');
-    res.render('admin/videos', { 
+    res.render('admin/manage-videos', {
       title: 'Manage Videos',
-      videos 
+      videos,
+      messages: {
+        success: req.flash('success_msg'),
+        error: req.flash('error_msg')
+      }
     });
   } catch (err) {
     console.error(err);
@@ -68,42 +71,66 @@ router.get('/admin', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Admin - Upload video
+// Admin - Upload video or add YouTube URL
 router.post('/admin', ensureAuthenticated, upload.single('video'), async (req, res) => {
   try {
-    const { title, description, isFeatured } = req.body;
-    
-    if (!req.file) {
-      req.flash('error_msg', 'No file uploaded');
-      return res.redirect('/videos/admin');
+    const { title, description, isFeatured, source, youtubeUrl } = req.body;
+
+    if (source === 'upload' && !req.file) {
+      req.flash('error_msg', 'Please upload a video file');
+      return res.redirect('/admin/videos');
     }
-    
-    const newVideo = new Video({
+
+    if (source === 'youtube' && !youtubeUrl) {
+      req.flash('error_msg', 'Please provide a YouTube URL');
+      return res.redirect('/admin/videos');
+    }
+
+    const videoData = {
       title,
       description,
-      videoUrl: `/uploads/videos/${req.file.filename}`,
+      isFeatured: isFeatured === 'on',
       uploadedBy: req.user._id,
-      isFeatured: isFeatured === 'on'
-    });
-    
+      source
+    };
+
+    if (source === 'youtube') {
+      const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+      const match = youtubeUrl.match(regExp);
+      if (!match) {
+        req.flash('error_msg', 'Invalid YouTube URL');
+        return res.redirect('/admin/videos');
+      }
+      videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
+    } else {
+      videoData.videoUrl = `/uploads/videos/${req.file.filename}`;
+    }
+
+    const newVideo = new Video(videoData);
     await newVideo.save();
-    req.flash('success_msg', 'Video uploaded successfully');
-    res.redirect('/videos/admin');
+    req.flash('success_msg', 'Video added successfully');
+    res.redirect('/admin/videos');
   } catch (err) {
     console.error(err);
+    if (req.file) {
+      await fs.unlink(path.join(__dirname, '../../public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
+        console.error('Error deleting uploaded video:', unlinkErr)
+      );
+    }
     req.flash('error_msg', 'Error uploading video');
-    res.redirect('/videos/admin');
+    res.redirect('/admin/videos');
   }
 });
+
 // Admin - Show edit video form
 router.get('/admin/:id/edit', ensureAuthenticated, async (req, res) => {
   try {
     const video = await Video.findById(req.params.id).lean();
     if (!video) {
       req.flash('error_msg', 'Video not found');
-      return res.redirect('/videos/admin');
+      return res.redirect('/admin/videos');
     }
-    res.render('admin/edit-video', { 
+    res.render('admin/edit-video', {
       title: 'Edit Video',
       video,
       messages: {
@@ -118,41 +145,68 @@ router.get('/admin/:id/edit', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Admin - Update video (title/description/featured status)
-router.put('/admin/:id', ensureAuthenticated, async (req, res) => {
+// Admin - Update video
+router.put('/admin/:id', ensureAuthenticated, upload.single('video'), async (req, res) => {
   try {
-    const { title, description, isFeatured } = req.body;
-    
-    const updated = await Video.findByIdAndUpdate(
-      req.params.id,
-      {
-        title,
-        description,
-        isFeatured: isFeatured === 'on',
-        updatedAt: Date.now()
-      },
-      { new: true, runValidators: true }
-    );
+    const { title, description, isFeatured, source, youtubeUrl } = req.body;
+    const video = await Video.findById(req.params.id);
 
-    if (!updated) {
+    if (!video) {
       req.flash('error_msg', 'Video not found');
       return res.redirect('/admin/videos');
     }
 
+    const updateData = {
+      title,
+      description,
+      isFeatured: isFeatured === 'on',
+      updatedAt: Date.now(),
+      source
+    };
+
+    if (source === 'youtube') {
+      const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+      const match = youtubeUrl.match(regExp);
+      if (!match) {
+        req.flash('error_msg', 'Invalid YouTube URL');
+        return res.redirect(`/admin/videos/${req.params.id}/edit`);
+      }
+      updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
+
+      if (video.source === 'upload' && video.videoUrl) {
+        const oldPath = path.join(__dirname, '../../public', video.videoUrl);
+        await fs.unlink(oldPath).catch((unlinkErr) =>
+          console.error('Error deleting old video:', unlinkErr)
+        );
+      }
+    } else if (req.file) {
+      updateData.videoUrl = `/uploads/videos/${req.file.filename}`;
+      if (video.source === 'upload' && video.videoUrl) {
+        const oldPath = path.join(__dirname, '../../public', video.videoUrl);
+        await fs.unlink(oldPath).catch((unlinkErr) =>
+          console.error('Error deleting old video:', unlinkErr)
+        );
+      }
+    } else {
+      updateData.videoUrl = video.videoUrl;
+    }
+
+    await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     req.flash('success_msg', 'Video updated successfully');
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(err);
-    let errorMsg = 'Error updating video';
-    if (err instanceof mongoose.Error.ValidationError) {
-      errorMsg = Object.values(err.errors).map(val => val.message).join(', ');
+    if (req.file) {
+      await fs.unlink(path.join(__dirname, '../../public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
+        console.error('Error deleting uploaded video:', unlinkErr)
+      );
     }
-    req.flash('error_msg', errorMsg);
+    req.flash('error_msg', 'Error updating video');
     res.redirect(`/admin/videos/${req.params.id}/edit`);
   }
 });
 
-// Update the delete route to use DELETE method
+// Admin - Delete video
 router.delete('/admin/:id', ensureAuthenticated, async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
@@ -160,41 +214,17 @@ router.delete('/admin/:id', ensureAuthenticated, async (req, res) => {
       req.flash('error_msg', 'Video not found');
       return res.redirect('/admin/videos');
     }
-    
-    // Delete file from filesystem
-    const filePath = path.join(__dirname, '../../public', video.videoUrl);
-    fs.unlink(filePath, (err) => {
-      if (err) console.error('Error deleting file:', err);
-    });
-    
-    await Video.findByIdAndDelete(req.params.id);
-    req.flash('success_msg', 'Video deleted successfully');
-    res.redirect('/admin/videos');
-  } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Error deleting video');
-    res.redirect('/admin/videos');
-  }
-});
 
-// Admin - Delete video
-router.post('/admin/:id/delete', ensureAuthenticated, async (req, res) => {
-  try {
-    const video = await Video.findById(req.params.id);
-    if (!video) {
-      req.flash('error_msg', 'Video not found');
-      return res.redirect('/admin/videos');
+    if (video.source === 'upload' && video.videoUrl) {
+      const filePath = path.join(__dirname, '../../public', video.videoUrl);
+      await fs.unlink(filePath).catch((unlinkErr) =>
+        console.error('Error deleting video file:', unlinkErr)
+      );
     }
-    
-    // Delete file from filesystem
-    const filePath = path.join(__dirname, '../../public', video.videoUrl);
-    fs.unlink(filePath, (err) => {
-      if (err) console.error('Error deleting file:', err);
-    });
-    
+
     await Video.findByIdAndDelete(req.params.id);
     req.flash('success_msg', 'Video deleted successfully');
-    res.redirect('/videos/admin');
+    res.redirect('/admin/videos');
   } catch (err) {
     console.error(err);
     req.flash('error_msg', 'Error deleting video');

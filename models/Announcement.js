@@ -49,6 +49,11 @@ const AnnouncementSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    author: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Admin',
+        required: true
+    },
     createdAt: {
         type: Date,
         default: Date.now

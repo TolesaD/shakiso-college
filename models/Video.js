@@ -10,18 +10,32 @@ const VideoSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    isYoutube: {
-        type: Boolean,
-        default: false
+    source: {
+        type: String,
+        enum: ['upload', 'youtube'],
+        required: true
+    },
+    videoUrl: {
+        type: String,
+        required: true
     },
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Admin'
     },
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
     }
+});
+
+VideoSchema.pre('save', function(next) {
+    this.updatedAt = Date.now();
+    next();
 });
 
 module.exports = mongoose.model('Video', VideoSchema);

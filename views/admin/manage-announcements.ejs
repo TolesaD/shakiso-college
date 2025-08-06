@@ -65,12 +65,6 @@
             font-size: 0.8rem;
             font-weight: bold;
         }
-        .media-preview {
-            max-width: 100%;
-            max-height: 200px;
-            margin: 1rem 0;
-            border-radius: 4px;
-        }
         .form-group {
             margin-bottom: 1.5rem;
         }
@@ -151,7 +145,6 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        /* Animation for deleted items */
         .deleting {
             opacity: 0.5;
             transform: scale(0.98);
@@ -175,7 +168,7 @@
                     <li><a href="/admin/dashboard">Dashboard</a></li>
                     <li><a href="/admin/announcements" class="active">Announcements</a></li>
                     <li><a href="/admin/photos">Photos</a></li>
-                    <li><a href="/videos/admin">Videos</a></li>
+                    <li><a href="/admin/videos">Videos</a></li>
                     <li><a href="/admin/logout">Logout</a></li>
                 </ul>
             </nav>
@@ -211,6 +204,10 @@
                         <label for="content">Content <span style="color:red">*</span></label>
                         <textarea id="content" name="content" class="form-control" required><%= typeof formData !== 'undefined' && formData.content ? formData.content : '' %></textarea>
                     </div>
+                    <div class="form-group">
+                        <label for="isActive">Active</label>
+                        <input type="checkbox" id="isActive" name="isActive" checked>
+                    </div>
                     <button type="submit" class="btn btn-primary" id="submit-btn">
                         Create Announcement
                     </button>
@@ -223,18 +220,23 @@
                     <% if (announcements && announcements.length > 0) { %>
                         <% announcements.forEach(function(announcement) { %>
                             <div class="announcement-item" id="announcement-<%= announcement._id %>">
-                                <h3><%= announcement.title %></h3>
+                                <h3><%= announcement.title || 'No Title' %></h3>
                                 <div class="announcement-meta">
-                                    Posted on <%= announcement.createdAt ? announcement.createdAt.toLocaleString() : '' %>
+                                    Posted on <%= announcement.createdAt ? announcement.createdAt.toLocaleString() : 'No Date' %>
+                                    by <%= announcement.author ? announcement.author.username : 'Unknown' %>
                                 </div>
                                 <div>
-                                    <%= announcement.content %>
+                                    <%= announcement.content || 'No Content' %>
                                 </div>
                                 <% if (announcement.isActive) { %>
                                     <span class="active-badge">Active</span>
                                 <% } else { %>
                                     <span class="inactive-badge">Inactive</span>
                                 <% } %>
+                                <!-- Debug Info -->
+                                <p style="color: gray; font-size: 0.8rem;">
+                                    Debug: ID=<%= announcement._id %>, isActive=<%= announcement.isActive %>, AuthorID=<%= announcement.author ? announcement.author._id : 'N/A' %>
+                                </p>
                                 <div class="announcement-actions">
                                     <a href="/admin/announcements/<%= announcement._id %>/edit" class="btn btn-secondary">Edit</a>
                                     <button class="btn btn-danger delete-btn" 
@@ -327,6 +329,6 @@
                 }, 300);
             }, 5000);
         }
-</script>
+    </script>
 </body>
 </html>

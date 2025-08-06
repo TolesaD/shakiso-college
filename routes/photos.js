@@ -4,23 +4,16 @@ const { ensureAuthenticated } = require('../middlewares/auth');
 const Photo = require('../models/Photo');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises; // Using promises version for async/await
-const mongoose = require('mongoose');
+const fs = require('fs').promises;
 
-// Configure storage for uploaded photos
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    try {
-      const uploadPath = path.join(__dirname, '../../public/uploads/photos');
-      await fs.mkdir(uploadPath, { recursive: true });
-      cb(null, uploadPath);
-    } catch (err) {
-      cb(err);
-    }
+    const uploadPath = path.join(__dirname, '../../public/uploads/photos');
+    await fs.mkdir(uploadPath, { recursive: true });
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    cb(null, Date.now() + path.extname(file.originalname));
   }
 });
 
@@ -41,11 +34,11 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-// Get all photos
+// Get all photos (public API)
 router.get('/', async (req, res) => {
   try {
     const photos = await Photo.find()
-      .sort({ uploadedAt: -1 })
+      .sort({ createdAt: -1 })
       .limit(12)
       .populate('uploadedBy', 'username');
     res.json(photos);
@@ -59,9 +52,9 @@ router.get('/', async (req, res) => {
 router.get('/admin', ensureAuthenticated, async (req, res) => {
   try {
     const photos = await Photo.find()
-      .sort({ uploadedAt: -1 })
+      .sort({ createdAt: -1 })
       .populate('uploadedBy', 'username');
-    res.render('admin/photos', { 
+    res.render('admin/manage-photos', { 
       title: 'Manage Photos',
       photos,
       messages: {
@@ -99,6 +92,11 @@ router.post('/admin', ensureAuthenticated, upload.single('image'), async (req, r
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(err);
+    if (req.file) {
+      await fs.unlink(path.join(__dirname, '../../public/uploads/photos', req.file.filename)).catch((unlinkErr) =>
+        console.error('Error deleting uploaded photo:', unlinkErr)
+      );
+    }
     let errorMsg = 'Error uploading photo';
     if (err instanceof multer.MulterError) {
       errorMsg = err.message;
@@ -132,10 +130,11 @@ router.get('/admin/:id/edit', ensureAuthenticated, async (req, res) => {
     res.redirect('/admin/photos');
   }
 });
-// Admin - Update photo (including image)
+
+// Admin - Update photo
 router.put('/admin/:id', ensureAuthenticated, upload.single('image'), async (req, res) => {
   try {
-    const { title, description, isFeatured, currentImage } = req.body;
+    const { title, description, isFeatured } = req.body;
     
     const updateData = {
       title,
@@ -146,15 +145,12 @@ router.put('/admin/:id', ensureAuthenticated, upload.single('image'), async (req
 
     if (req.file) {
       updateData.imageUrl = '/uploads/photos/' + req.file.filename;
-      
-      // Delete old image file if new one was uploaded
-      if (currentImage) {
-        const oldPath = path.join(__dirname, '../../public', currentImage);
-        try {
-          await fs.unlink(oldPath);
-        } catch (unlinkErr) {
-          console.error('Error deleting old image:', unlinkErr);
-        }
+      const oldPhoto = await Photo.findById(req.params.id);
+      if (oldPhoto?.imageUrl) {
+        const oldPath = path.join(__dirname, '../../public', oldPhoto.imageUrl);
+        await fs.unlink(oldPath).catch((unlinkErr) =>
+          console.error('Error deleting old image:', unlinkErr)
+        );
       }
     }
 
@@ -173,6 +169,11 @@ router.put('/admin/:id', ensureAuthenticated, upload.single('image'), async (req
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(err);
+    if (req.file) {
+      await fs.unlink(path.join(__dirname, '../../public/uploads/photos', req.file.filename)).catch((unlinkErr) =>
+        console.error('Error deleting uploaded photo:', unlinkErr)
+      );
+    }
     let errorMsg = 'Error updating photo';
     if (err instanceof mongoose.Error.ValidationError) {
       errorMsg = Object.values(err.errors).map(val => val.message).join(', ');
@@ -193,12 +194,11 @@ router.delete('/admin/:id', ensureAuthenticated, async (req, res) => {
       return res.redirect('/admin/photos');
     }
     
-    // Delete file from filesystem
-    const filePath = path.join(__dirname, '../../public', photo.imageUrl);
-    try {
-      await fs.unlink(filePath);
-    } catch (unlinkErr) {
-      console.error('Error deleting image file:', unlinkErr);
+    if (photo.imageUrl) {
+      const filePath = path.join(__dirname, '../../public', photo.imageUrl);
+      await fs.unlink(filePath).catch((unlinkErr) =>
+        console.error('Error deleting image file:', unlinkErr)
+      );
     }
     
     await Photo.findByIdAndDelete(req.params.id);

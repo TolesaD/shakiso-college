@@ -18,26 +18,4 @@
     <section class="section">
         <div class="container">
             <div class="gallery">
-                <% if (photos.length > 0) { %>
-                    <% photos.forEach(photo => { %>
-                        <div class="gallery-item">
-                            <img src="<%= photo.imagePath %>" alt="<%= photo.title %>">
-                            <div class="overlay">
-                                <h3><%= photo.title %></h3>
-                                <% if (photo.description) { %>
-                                    <p><%= photo.description %></p>
-                                <% } %>
-                            </div>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <p>No photos available in the gallery.</p>
-                <% } %>
-            </div>
-        </div>
-    </section>
-
-    <%- include('partials/footer') %>
-    <script src="/js/main.js"></script>
-</body>
-</html>
+                <% if (
