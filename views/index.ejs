@@ -41,6 +41,60 @@
             margin-bottom: 0.5rem;
             font-size: 1.2rem;
         }
+        .img-fluid {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .overlay {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+        .gallery-item:hover .overlay {
+            transform: translateY(0);
+        }
+        .announcement-item {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .date {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -59,6 +113,17 @@
 
     <section class="section">
         <div class="container">
+            <% if (messages.success && messages.success.length > 0) { %>
+                <% messages.success.forEach(message => { %>
+                    <div class="alert alert-success"><%= message %></div>
+                <% }) %>
+            <% } %>
+            <% if (messages.error && messages.error.length > 0) { %>
+                <% messages.error.forEach(message => { %>
+                    <div class="alert alert-danger"><%= message %></div>
+                <% }) %>
+            <% } %>
+
             <h2 class="section-title">College Highlights</h2>
             <div class="highlights">
                 <div class="highlight-card">
@@ -84,16 +149,25 @@
         <div class="container">
             <h2 class="section-title">Latest Announcements</h2>
             <div class="announcements">
-                <% if (announcements.length > 0) { %>
+                <% console.log('Announcements:', announcements); %>
+                <% if (announcements && announcements.length > 0) { %>
                     <% announcements.forEach(announcement => { %>
                         <div class="announcement-item">
                             <h3><%= announcement.title %></h3>
                             <p><%= announcement.content %></p>
                             <% if (announcement.media && announcement.media.url) { %>
                                 <% if (announcement.media.type === 'image') { %>
+<<<<<<< HEAD
                                     <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || announcement.title %>">
                                 <% } else if (announcement.media.type === 'video') { %>
                                     <iframe src="<%= announcement.media.url %>" frameborder="0" allowfullscreen></iframe>
+=======
+                                    <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || 'Media' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load announcement image: <%= announcement.media.url %>')">
+                                <% } else if (announcement.media.type === 'video') { %>
+                                    <div class="video-container">
+                                        <iframe src="<%= announcement.media.url %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                    </div>
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                                 <% } %>
                             <% } %>
                             <span class="date"><%= announcement.createdAt.toLocaleDateString() %></span>
@@ -111,12 +185,20 @@
         <div class="container">
             <h2 class="section-title">Photo Gallery</h2>
             <div class="gallery">
-                <% if (photos.length > 0) { %>
+                <% console.log('Photos:', photos); %>
+                <% if (photos && photos.length > 0) { %>
                     <% photos.forEach(photo => { %>
                         <div class="gallery-item">
+<<<<<<< HEAD
                             <img src="<%= photo.imageUrl %>" alt="<%= photo.title %>">
+=======
+                            <img src="<%= photo.imageUrl %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load photo: <%= photo.imageUrl %>')">
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                             <div class="overlay">
-                                <h3><%= photo.title %></h3>
+                                <h3><%= photo.title || 'Untitled' %></h3>
+                                <% if (photo.description) { %>
+                                    <p><%= photo.description %></p>
+                                <% } %>
                             </div>
                         </div>
                     <% }) %>
@@ -132,21 +214,28 @@
         <div class="container">
             <h2 class="section-title">Latest Videos</h2>
             <div class="video-grid">
-                <% if (videos.length > 0) { %>
+                <% console.log('Videos:', videos); %>
+                <% if (videos && videos.length > 0) { %>
                     <% videos.forEach(video => { %>
                         <div class="video-card">
                             <div class="video-container">
                                 <% if (video.source === 'youtube') { %>
+<<<<<<< HEAD
                                     <iframe src="<%= video.videoUrl %>" frameborder="0" allowfullscreen></iframe>
                                 <% } else { %>
                                     <video controls>
+=======
+                                    <iframe src="<%= video.videoUrl %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                <% } else { %>
+                                    <video controls onerror="console.error('Failed to load video: <%= video.videoUrl %>')">
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                                         <source src="<%= video.videoUrl %>" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 <% } %>
                             </div>
                             <div class="video-info">
-                                <h3><%= video.title %></h3>
+                                <h3><%= video.title || 'Untitled' %></h3>
                                 <% if (video.description) { %>
                                     <p><%= video.description %></p>
                                 <% } %>

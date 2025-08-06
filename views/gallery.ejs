@@ -1,21 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%- include('partials/head', {title: 'Photo Gallery'}) %>
+    <%- include('partials/head', {title: 'Gallery'}) %>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .img-fluid {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        .overlay {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+        .gallery-item:hover .overlay {
+            transform: translateY(0);
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 <body>
     <%- include('partials/header', {user}) %>
     
-    <section class="hero" style="background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/gallery-bg.jpg');">
+    <main>
         <div class="container">
-            <div class="hero-content">
-                <h1>Photo Gallery</h1>
-                <p>Explore moments from our campus life, events, and student activities.</p>
+            <% if (messages.success && messages.success.length > 0) { %>
+                <% messages.success.forEach(message => { %>
+                    <div class="alert alert-success"><%= message %></div>
+                <% }) %>
+            <% } %>
+            <% if (messages.error && messages.error.length > 0) { %>
+                <% messages.error.forEach(message => { %>
+                    <div class="alert alert-danger"><%= message %></div>
+                <% }) %>
+            <% } %>
+
+            <h1>Photo Gallery</h1>
+            <div class="gallery">
+<<<<<<< HEAD
+                <% if (
+=======
+                <% console.log('Photos:', photos); %>
+                <% if (photos && photos.length > 0) { %>
+                    <% photos.forEach(photo => { %>
+                        <div class="gallery-item">
+                            <img src="<%= photo.imageUrl %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load photo: <%= photo.imageUrl %>')">
+                            <div class="overlay">
+                                <h3><%= photo.title || 'Untitled' %></h3>
+                                <% if (photo.description) { %>
+                                    <p><%= photo.description %></p>
+                                <% } %>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No photos available.</p>
+                <% } %>
             </div>
         </div>
-    </section>
+    </main>
 
-    <section class="section">
-        <div class="container">
-            <div class="gallery">
-                <% if (
+    <%- include('partials/footer') %>
+    <script src="/js/main.js"></script>
+</body>
+</html>
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c

@@ -179,17 +179,21 @@
         <div class="container">
             <!-- Flash messages container -->
             <div id="flash-messages">
-                <% if (messages && messages.success) { %>
-                    <div class="alert alert-success">
-                        <%= messages.success %>
-                        <button type="button" class="btn-close" onclick="this.parentElement.remove()">×</button>
-                    </div>
+                <% if (messages && messages.success && messages.success.length > 0) { %>
+                    <% messages.success.forEach(message => { %>
+                        <div class="alert alert-success">
+                            <%= message %>
+                            <button type="button" class="btn-close" onclick="this.parentElement.remove()">×</button>
+                        </div>
+                    <% }) %>
                 <% } %>
-                <% if (messages && messages.error) { %>
-                    <div class="alert alert-danger">
-                        <%= messages.error %>
-                        <button type="button" class="btn-close" onclick="this.parentElement.remove()">×</button>
-                    </div>
+                <% if (messages && messages.error && messages.error.length > 0) { %>
+                    <% messages.error.forEach(message => { %>
+                        <div class="alert alert-danger">
+                            <%= message %>
+                            <button type="button" class="btn-close" onclick="this.parentElement.remove()">×</button>
+                        </div>
+                    <% }) %>
                 <% } %>
             </div>
 
@@ -233,19 +237,36 @@
                                 <% } else { %>
                                     <span class="inactive-badge">Inactive</span>
                                 <% } %>
+<<<<<<< HEAD
                                 <!-- Debug Info -->
                                 <p style="color: gray; font-size: 0.8rem;">
                                     Debug: ID=<%= announcement._id %>, isActive=<%= announcement.isActive %>, AuthorID=<%= announcement.author ? announcement.author._id : 'N/A' %>
                                 </p>
+=======
+                                <% if (announcement.media && announcement.media.url) { %>
+                                    <% if (announcement.media.type === 'image') { %>
+                                        <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || announcement.title %>" class="media-preview">
+                                    <% } else if (announcement.media.type === 'video') { %>
+                                        <iframe src="<%= announcement.media.url %>" frameborder="0" allowfullscreen class="media-preview"></iframe>
+                                    <% } %>
+                                    <% if (announcement.media.title) { %>
+                                        <p><strong>Media Title:</strong> <%= announcement.media.title %></p>
+                                    <% } %>
+                                    <% if (announcement.media.description) { %>
+                                        <p><strong>Media Description:</strong> <%= announcement.media.description %></p>
+                                    <% } %>
+                                <% } %>
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                                 <div class="announcement-actions">
                                     <a href="/admin/announcements/<%= announcement._id %>/edit" class="btn btn-secondary">Edit</a>
-                                    <button class="btn btn-danger delete-btn" 
-                                            data-id="<%= announcement._id %>">
-                                        Delete
-                                    </button>
+                                    <form action="/admin/announcements/<%= announcement._id %>?_method=DELETE" method="POST" class="delete-form">
+                                        <button type="submit" class="btn btn-danger delete-btn" onclick="return confirm('Are you sure you want to delete this announcement?');">
+                                            Delete
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
-                        <% }); %>
+                        <% }) %>
                     <% } else { %>
                         <p>No announcements found.</p>
                     <% } %>
@@ -262,49 +283,17 @@
             submitBtn.innerHTML = '<span class="spinner"></span> Creating...';
         });
 
-        // Handle announcement deletion
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const announcementId = this.dataset.id;
-                const announcementItem = document.getElementById(`announcement-${announcementId}`);
-                
-                if (confirm('Are you sure you want to delete this announcement?')) {
-                    // Show loading state
-                    this.disabled = true;
-                    this.innerHTML = '<span class="spinner"></span> Deleting...';
-                    announcementItem.classList.add('deleting');
-                    
-                    fetch(`/admin/announcements/${announcementId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // Show success message
-                            showFlashMessage(data.message || 'Announcement deleted successfully', 'success');
-                            
-                            // Animate removal
-                            announcementItem.classList.add('deleted');
-                            setTimeout(() => {
-                                announcementItem.remove();
-                            }, 300);
-                        } else {
-                            throw new Error(data.message || 'Failed to delete announcement');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        showFlashMessage(error.message, 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = 'Delete';
-                        announcementItem.classList.remove('deleting');
-                    });
-                }
+        // Handle form-based deletion with feedback
+        document.querySelectorAll('.delete-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const submitBtn = this.querySelector('.delete-btn');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner"></span> Deleting...';
+                const announcementItem = this.closest('.announcement-item');
+                announcementItem.classList.add('deleting');
             });
         });
+<<<<<<< HEAD
 
         // Show flash message function
         function showFlashMessage(message, type) {
@@ -329,6 +318,8 @@
                 }, 300);
             }, 5000);
         }
+=======
+>>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
     </script>
 </body>
 </html>

@@ -3,7 +3,6 @@
 <head>
     <%- include('../partials/head', {title: announcement ? 'Edit Announcement' : 'New Announcement'}) %>
     <style>
-        /* Your existing styles remain the same */
         .admin-main {
             padding: 2rem 0;
         }
@@ -31,94 +30,114 @@
             min-height: 150px;
         }
         .alert {
-            padding: 0.75rem;
-            margin-bottom: 1.5rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
             border-radius: 4px;
         }
         .alert-success {
             background-color: #d4edda;
             color: #155724;
-            border: 1px solid #c3e6cb;
         }
         .alert-danger {
             background-color: #f8d7da;
             color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
         }
         .btn {
             padding: 0.75rem 1.5rem;
-            border: none;
             border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
         }
         .btn-primary {
-            background-color: #2c3e50;
-            color: white;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
         }
         .btn-secondary {
             background-color: #6c757d;
-            color: white;
-            text-decoration: none;
+            color: #fff;
+            border: none;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
         }
     </style>
 </head>
 <body>
-    <%- include('../partials/header') %>
+    <%- include('../partials/header', {user, currentRoute: 'announcements'}) %>
     
     <main class="admin-main">
         <div class="container">
-            <h1><%= announcement ? 'Edit Announcement' : 'Create New Announcement' %></h1>
+            <h1><%= announcement ? 'Edit Announcement' : 'New Announcement' %></h1>
             
-            <!-- Flash Messages -->
-            <% if (messages && messages.success) { %>
-                <div class="alert alert-success">
-                    <%= messages.success %>
+            <% if (messages.error && messages.error.length > 0) { %>
+                <div class="alert alert-danger">
+                    <% messages.error.forEach(message => { %>
+                        <p><%= message %></p>
+                    <% }) %>
                 </div>
             <% } %>
-            <% if (messages && messages.error) { %>
-                <div class="alert alert-danger">
-                    <%= messages.error %>
+            <% if (messages.success && messages.success.length > 0) { %>
+                <div class="alert alert-success">
+                    <% messages.success.forEach(message => { %>
+                        <p><%= message %></p>
+                    <% }) %>
                 </div>
             <% } %>
 
-            <!-- Form with proper CSRF protection -->
-            <form method="POST" action="<%= announcement ? '/admin/announcements/' + announcement._id + '?_method=PUT' : '/admin'/announcements %>">
-                <!-- Required CSRF Token -->
-                <input type="hidden">
-                
-                <!-- Title Field -->
+            <form action="<%= announcement ? '/admin/announcements/' + announcement._id + '?_method=PUT' : '/admin/announcements' %>" method="POST" enctype="multipart/form-data">
                 <div class="form-group">
-                    <label for="title">Title *</label>
-                    <input type="text" id="title" name="title" class="form-control" 
-                           value="<%= announcement ? announcement.title : '' %>" required>
+                    <label for="title">Title</label>
+                    <input type="text" id="title" name="title" class="form-control" value="<%= announcement ? announcement.title : '' %>" required>
                 </div>
-                
-                <!-- Content Field -->
+
                 <div class="form-group">
-                    <label for="content">Content *</label>
-                    <textarea id="content" name="content" class="form-control" rows="5" required><%= announcement ? announcement.content : '' %></textarea>
+                    <label for="content">Content</label>
+                    <textarea id="content" name="content" class="form-control" required><%= announcement ? announcement.content : '' %></textarea>
                 </div>
-                <!-- Status Toggle -->
-                <% if (announcement) { %>
+
                 <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="isActive" <%= announcement.isActive ? 'checked' : '' %>>
-                        Active Announcement
-                    </label>
+                    <label for="isActive">Active</label>
+                    <input type="checkbox" id="isActive" name="isActive" <%= announcement ? (announcement.isActive ? 'checked' : '') : 'checked' %>>
                 </div>
-                <% } %>
-                
-                <!-- Form Actions -->
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">
-                        <%= announcement ? 'Update Announcement' : 'Create Announcement' %>
-                    </button>
+
+                <div class="form-group">
+                    <label for="mediaSource">Media Source</label>
+                    <select id="mediaSource" name="mediaSource" class="form-control" onchange="toggleMediaFields()">
+                        <option value="" <%= !announcement || !announcement.media ? 'selected' : '' %>>None</option>
+                        <option value="upload" <%= announcement && announcement.media && announcement.media.type !== 'video' ? 'selected' : '' %>>Upload File</option>
+                        <option value="youtube" <%= announcement && announcement.media && announcement.media.type === 'video' ? 'selected' : '' %>>YouTube URL</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="uploadField" style="display: <%= announcement && announcement.media && announcement.media.type !== 'video' ? 'block' : 'none' %>;">
+                    <label for="media">Media File (Image or Video)</label>
+                    <input type="file" id="media" name="media" accept="image/*,video/*" class="form-control">
+                    <% if (announcement && announcement.media && announcement.media.url && announcement.media.type !== 'video') { %>
+                        <p>Current file: <a href="<%= announcement.media.url %>" target="_blank">View</a></p>
+                    <% } %>
+                </div>
+
+                <div class="form-group" id="youtubeField" style="display: <%= announcement && announcement.media && announcement.media.type === 'video' ? 'block' : 'none' %>;">
+                    <label for="youtubeUrl">YouTube URL</label>
+                    <input type="text" id="youtubeUrl" name="youtubeUrl" class="form-control" value="<%= announcement && announcement.media && announcement.media.type === 'video' ? announcement.media.url : '' %>">
+                </div>
+
+                <div class="form-group">
+                    <label for="mediaTitle">Media Title</label>
+                    <input type="text" id="mediaTitle" name="mediaTitle" class="form-control" value="<%= announcement && announcement.media ? announcement.media.title : '' %>">
+                </div>
+
+                <div class="form-group">
+                    <label for="mediaDescription">Media Description</label>
+                    <textarea id="mediaDescription" name="mediaDescription" class="form-control"><%= announcement && announcement.media ? announcement.media.description : '' %></textarea>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary"><%= announcement ? 'Update Announcement' : 'Create Announcement' %></button>
                     <a href="/admin/announcements" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
@@ -126,5 +145,13 @@
     </main>
 
     <%- include('../partials/footer') %>
+
+    <script>
+        function toggleMediaFields() {
+            const mediaSource = document.getElementById('mediaSource').value;
+            document.getElementById('uploadField').style.display = mediaSource === 'upload' ? 'block' : 'none';
+            document.getElementById('youtubeField').style.display = mediaSource === 'youtube' ? 'block' : 'none';
+        }
+    </script>
 </body>
 </html>
