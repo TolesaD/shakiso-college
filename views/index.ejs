@@ -155,21 +155,6 @@
                         <div class="announcement-item">
                             <h3><%= announcement.title %></h3>
                             <p><%= announcement.content %></p>
-                            <% if (announcement.media && announcement.media.url) { %>
-                                <% if (announcement.media.type === 'image') { %>
-<<<<<<< HEAD
-                                    <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || announcement.title %>">
-                                <% } else if (announcement.media.type === 'video') { %>
-                                    <iframe src="<%= announcement.media.url %>" frameborder="0" allowfullscreen></iframe>
-=======
-                                    <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || 'Media' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load announcement image: <%= announcement.media.url %>')">
-                                <% } else if (announcement.media.type === 'video') { %>
-                                    <div class="video-container">
-                                        <iframe src="<%= announcement.media.url %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                                    </div>
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
-                                <% } %>
-                            <% } %>
                             <span class="date"><%= announcement.createdAt.toLocaleDateString() %></span>
                         </div>
                     <% }) %>
@@ -189,11 +174,7 @@
                 <% if (photos && photos.length > 0) { %>
                     <% photos.forEach(photo => { %>
                         <div class="gallery-item">
-<<<<<<< HEAD
-                            <img src="<%= photo.imageUrl %>" alt="<%= photo.title %>">
-=======
                             <img src="<%= photo.imageUrl %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load photo: <%= photo.imageUrl %>')">
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                             <div class="overlay">
                                 <h3><%= photo.title || 'Untitled' %></h3>
                                 <% if (photo.description) { %>
@@ -220,15 +201,9 @@
                         <div class="video-card">
                             <div class="video-container">
                                 <% if (video.source === 'youtube') { %>
-<<<<<<< HEAD
-                                    <iframe src="<%= video.videoUrl %>" frameborder="0" allowfullscreen></iframe>
-                                <% } else { %>
-                                    <video controls>
-=======
                                     <iframe src="<%= video.videoUrl %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                                 <% } else { %>
                                     <video controls onerror="console.error('Failed to load video: <%= video.videoUrl %>')">
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                                         <source src="<%= video.videoUrl %>" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>

@@ -237,26 +237,10 @@
                                 <% } else { %>
                                     <span class="inactive-badge">Inactive</span>
                                 <% } %>
-<<<<<<< HEAD
                                 <!-- Debug Info -->
                                 <p style="color: gray; font-size: 0.8rem;">
                                     Debug: ID=<%= announcement._id %>, isActive=<%= announcement.isActive %>, AuthorID=<%= announcement.author ? announcement.author._id : 'N/A' %>
                                 </p>
-=======
-                                <% if (announcement.media && announcement.media.url) { %>
-                                    <% if (announcement.media.type === 'image') { %>
-                                        <img src="<%= announcement.media.url %>" alt="<%= announcement.media.title || announcement.title %>" class="media-preview">
-                                    <% } else if (announcement.media.type === 'video') { %>
-                                        <iframe src="<%= announcement.media.url %>" frameborder="0" allowfullscreen class="media-preview"></iframe>
-                                    <% } %>
-                                    <% if (announcement.media.title) { %>
-                                        <p><strong>Media Title:</strong> <%= announcement.media.title %></p>
-                                    <% } %>
-                                    <% if (announcement.media.description) { %>
-                                        <p><strong>Media Description:</strong> <%= announcement.media.description %></p>
-                                    <% } %>
-                                <% } %>
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
                                 <div class="announcement-actions">
                                     <a href="/admin/announcements/<%= announcement._id %>/edit" class="btn btn-secondary">Edit</a>
                                     <form action="/admin/announcements/<%= announcement._id %>?_method=DELETE" method="POST" class="delete-form">
@@ -293,7 +277,6 @@
                 announcementItem.classList.add('deleting');
             });
         });
-<<<<<<< HEAD
 
         // Show flash message function
         function showFlashMessage(message, type) {
@@ -318,8 +301,6 @@
                 }, 300);
             }, 5000);
         }
-=======
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
     </script>
 </body>
 </html>

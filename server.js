@@ -214,7 +214,7 @@ app.use((req, res, next) => {
   console.log(
     `[${new Date().toISOString()}] ${req.method} ${req.url} | Cookies: ${JSON.stringify(
       req.cookies
-    )} | Set-Cookie: ${res.get('Set-Cookie') || 'none'}`
+    )} | Set-Cookie: ${res.get('Set-Cookie') || 'none'} | Accept: ${req.headers.accept || 'none'}`
   );
   res.on('finish', () => {
     console.log(`[${new Date().toISOString()}] Response headers: ${JSON.stringify(res.getHeaders())}`);
@@ -251,8 +251,9 @@ function ensureAuthenticated(req, res, next) {
 // Error handling middleware for Multer
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
+    console.error(`[${new Date().toISOString()}] Multer error:`, err);
     req.flash('error', err.message);
-    return res.redirect('back');
+    return res.status(400).json({ success: false, message: err.message });
   }
   next(err);
 });
@@ -298,6 +299,24 @@ app.get('/contact', (req, res) => {
     user: req.session.user,
     messages: req.flash(),
   });
+});
+
+app.get('/announcements', async (req, res) => {
+  try {
+    const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched public announcements:`, { count: announcements.length });
+    res.render('announcements', {
+      announcements,
+      user: req.session.user,
+      messages: req.flash(),
+    });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Public announcements error:`, err);
+    res.status(500).render('error', {
+      message: 'Failed to load announcements',
+      error: process.env.NODE_ENV === 'development' ? err : {},
+    });
+  }
 });
 
 app.get('/gallery', async (req, res) => {
@@ -501,15 +520,8 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
 // Announcements Routes
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
   try {
-    const announcements = await Announcement.find()
-      .sort({ createdAt: -1 })
-      .populate('author', 'username');
-    console.log(`[${new Date().toISOString()}] Admin fetched announcements:`, 
-      announcements.length, 
-      announcements.map(a => ({ id: a._id, title: a.title, isActive: a.isActive, author: a.author ? a.author.username : 'N/A' }))
-    );
+    const announcements = await Announcement.find().sort({ createdAt: -1 });
     res.render('admin/manage-announcements', {
-      title: 'Manage Announcements',
       announcements,
       user: req.session.user,
       currentRoute: 'announcements',
@@ -517,14 +529,15 @@ app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
     });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Announcements error:`, err);
-    req.flash('error', 'Error fetching announcements');
-    res.redirect('/admin/dashboard');
+    res.status(500).render('error', {
+      message: 'Failed to load announcements',
+      error: process.env.NODE_ENV === 'development' ? err : {},
+    });
   }
 });
 
 app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
   res.render('admin/edit-announcement', {
-    title: 'Create Announcement',
     announcement: null,
     user: req.session.user,
     messages: req.flash(),
@@ -533,13 +546,12 @@ app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
 
 app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) => {
   try {
-    const announcement = await Announcement.findById(req.params.id).populate('author', 'username');
+    const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
       req.flash('error', 'Announcement not found');
       return res.redirect('/admin/announcements');
     }
     res.render('admin/edit-announcement', {
-      title: 'Edit Announcement',
       announcement,
       user: req.session.user,
       messages: req.flash(),
@@ -554,28 +566,18 @@ app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) =
 app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
   try {
     const { title, content, isActive } = req.body;
-    const authorId = req.session.user.id;
+    console.log(`[${new Date().toISOString()}] Creating announcement:`, { title, isActive });
 
-    const admin = await Admin.findById(authorId);
-    if (!admin) {
-      throw new Error(`Invalid author ID: ${authorId}`);
-    }
-    console.log(`[${new Date().toISOString()}] Creating announcement with author:`, { authorId, username: admin.username });
-
-    const newAnnouncement = new Announcement({
+    const announcementData = {
       title,
       content,
-      isActive: isActive === 'on' ? true : false,
-      author: authorId,
-    });
+      isActive: isActive === 'on',
+      author: req.session.user.id,
+    };
 
-    const savedAnnouncement = await newAnnouncement.save();
-    console.log(`[${new Date().toISOString()}] Announcement created:`, {
-      id: savedAnnouncement._id,
-      title: savedAnnouncement.title,
-      isActive: savedAnnouncement.isActive,
-      author: savedAnnouncement.author,
-    });
+    const newAnnouncement = new Announcement(announcementData);
+    await newAnnouncement.save();
+    console.log(`[${new Date().toISOString()}] Saved announcement:`, newAnnouncement.toObject());
     req.flash('success', 'Announcement created successfully');
     res.redirect('/admin/announcements');
   } catch (err) {
@@ -586,7 +588,7 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
         ? Object.values(err.errors)
             .map((e) => e.message)
             .join(', ')
-        : `Failed to create announcement: ${err.message}`
+        : 'Failed to create announcement'
     );
     res.redirect('/admin/announcements/new');
   }
@@ -595,28 +597,17 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
 app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { title, content, isActive } = req.body;
-    const authorId = req.session.user.id;
-
-    const admin = await Admin.findById(authorId);
-    if (!admin) {
-      throw new Error(`Invalid author ID: ${authorId}`);
-    }
-    console.log(`[${new Date().toISOString()}] Updating announcement with author:`, { authorId, username: admin.username });
+    console.log(`[${new Date().toISOString()}] Updating announcement:`, { id: req.params.id, title, isActive });
 
     const updateData = {
       title,
       content,
-      isActive: isActive === 'on' ? true : false,
+      isActive: isActive === 'on',
       updatedAt: Date.now(),
     };
 
     const updatedAnnouncement = await Announcement.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-    console.log(`[${new Date().toISOString()}] Announcement updated:`, {
-      id: updatedAnnouncement._id,
-      title: updatedAnnouncement.title,
-      isActive: updatedAnnouncement.isActive,
-      author: updatedAnnouncement.author,
-    });
+    console.log(`[${new Date().toISOString()}] Updated announcement:`, updatedAnnouncement.toObject());
     req.flash('success', 'Announcement updated successfully');
     res.redirect('/admin/announcements');
   } catch (err) {
@@ -627,7 +618,7 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
         ? Object.values(err.errors)
             .map((e) => e.message)
             .join(', ')
-        : `Failed to update announcement: ${err.message}`
+        : 'Failed to update announcement'
     );
     res.redirect(`/admin/announcements/${req.params.id}/edit`);
   }
@@ -635,15 +626,18 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
 
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
   try {
-    const announcement = await Announcement.findByIdAndDelete(req.params.id);
+    const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
+      console.log(`[${new Date().toISOString()}] Announcement not found:`, req.params.id);
       return res.status(404).json({ success: false, message: 'Announcement not found' });
     }
-    console.log(`[${new Date().toISOString()}] Announcement deleted:`, { id: req.params.id });
+
+    await Announcement.findByIdAndDelete(req.params.id);
+    console.log(`[${new Date().toISOString()}] Deleted announcement:`, req.params.id);
     return res.json({ success: true, message: 'Announcement deleted successfully' });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete announcement error:`, err);
-    return res.status(500).json({ success: false, message: `Failed to delete announcement: ${err.message}` });
+    return res.status(500).json({ success: false, message: 'Failed to delete announcement' });
   }
 });
 
@@ -733,8 +727,9 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
   }
 });
 
-app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
+app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res, next) => {
   try {
+    console.log(`[${new Date().toISOString()}] Updating photo:`, { id: req.params.id, session: req.sessionID });
     const { title, description, isFeatured } = req.body;
     const updateData = {
       title,
@@ -755,9 +750,26 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     }
 
     const updatedPhoto = await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    if (!updatedPhoto) {
+      req.flash('error', 'Photo not found');
+      console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
+      return res.redirect('/admin/photos');
+    }
     console.log(`[${new Date().toISOString()}] Updated photo:`, updatedPhoto.toObject());
     req.flash('success', 'Photo updated successfully');
-    res.redirect('/admin/photos');
+    console.log(`[${new Date().toISOString()}] Flash messages set:`, req.flash());
+
+    // Explicitly save session before redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        req.flash('error', 'Failed to save session');
+        return res.redirect(`/admin/photos/${req.params.id}/edit`);
+      }
+      // Add cache-control headers to ensure fresh page load
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.redirect('/admin/photos');
+    });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo update error:`, err);
     if (req.file && process.env.NODE_ENV !== 'production') {
@@ -773,46 +785,34 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
             .join(', ')
         : 'Failed to update photo'
     );
-    res.redirect(`/admin/photos/${req.params.id}/edit`);
+    req.session.save(() => {
+      res.redirect(`/admin/photos/${req.params.id}/edit`);
+    });
   }
 });
 
 app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
   try {
+    console.log(`[${new Date().toISOString()}] Deleting photo:`, { id: req.params.id, accept: req.headers.accept });
     const photo = await Photo.findById(req.params.id);
     if (!photo) {
-      if (req.headers.accept && req.headers.accept.includes('application/json')) {
-        return res.status(404).json({ success: false, message: 'Photo not found' });
-      }
-      req.flash('error', 'Photo not found');
-      return res.redirect('/admin/photos');
+      console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
+      return res.status(404).json({ success: false, message: 'Photo not found' });
     }
 
     if (photo.imageUrl && process.env.NODE_ENV !== 'production') {
       const filePath = path.join(__dirname, 'public', photo.imageUrl);
-      if (fs.existsSync(filePath)) {
-        fs.unlink(filePath).catch((unlinkErr) =>
-          console.error(`[${new Date().toISOString()}] Failed to delete photo file:`, unlinkErr)
-        );
-      }
+      await fs.unlink(filePath).catch((unlinkErr) =>
+        console.error(`[${new Date().toISOString()}] Failed to delete photo file:`, unlinkErr)
+      );
     }
 
     await Photo.findByIdAndDelete(req.params.id);
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      return res.json({
-        success: true,
-        message: 'Photo deleted successfully',
-      });
-    }
-    req.flash('success', 'Photo deleted successfully');
-    res.redirect('/admin/photos');
+    console.log(`[${new Date().toISOString()}] Deleted photo:`, req.params.id);
+    return res.json({ success: true, message: 'Photo deleted successfully' });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete photo error:`, err);
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      return res.status(500).json({ success: false, message: 'Failed to delete photo' });
-    }
-    req.flash('error', 'Failed to delete photo');
-    res.redirect('/admin/photos');
+    return res.status(500).json({ success: false, message: 'Failed to delete photo', error: err.message });
   }
 });
 
@@ -996,11 +996,8 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
     if (!video) {
-      if (req.headers.accept && req.headers.accept.includes('application/json')) {
-        return res.status(404).json({ success: false, message: 'Video not found' });
-      }
-      req.flash('error', 'Video not found');
-      return res.redirect('/admin/videos');
+      console.log(`[${new Date().toISOString()}] Video not found:`, req.params.id);
+      return res.status(404).json({ success: false, message: 'Video not found' });
     }
 
     if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
@@ -1011,18 +1008,11 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
     }
 
     await Video.findByIdAndDelete(req.params.id);
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      return res.json({ success: true, message: 'Video deleted successfully' });
-    }
-    req.flash('success', 'Video deleted successfully');
-    res.redirect('/admin/videos');
+    console.log(`[${new Date().toISOString()}] Deleted video:`, req.params.id);
+    return res.json({ success: true, message: 'Video deleted successfully' });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete video error:`, err);
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      return res.status(500).json({ success: false, message: 'Failed to delete video' });
-    }
-    req.flash('error', 'Failed to delete video');
-    res.redirect('/admin/videos');
+    return res.status(500).json({ success: false, message: 'Failed to delete video' });
   }
 });
 
@@ -1085,9 +1075,10 @@ async function initializeAdmin() {
 // Global Error Handling
 app.use((err, req, res, next) => {
   console.error(`[${new Date().toISOString()}] Error:`, err.stack);
-  res.status(500).render('error', {
+  res.status(500).json({
+    success: false,
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err : {},
+    error: process.env.NODE_ENV === 'development' ? err.message : {},
   });
 });
 
