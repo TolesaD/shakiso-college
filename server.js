@@ -9,6 +9,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
+const AWS = require('aws-sdk');
+const multerS3 = require('multer-s3');
 
 // Initialize Express app
 const app = express();
@@ -19,10 +21,13 @@ console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not 
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
+console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
+console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Not set');
+console.log('AWS_S3_BUCKET:', process.env.AWS_S3_BUCKET ? 'Set' : 'Not set');
 
 // HTTPS redirection for production
 if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1); // Trust Render's proxy
+  app.set('trust proxy', 1);
   app.use((req, res, next) => {
     if (req.header('x-forwarded-proto') !== 'https') {
       console.log(`[${new Date().toISOString()}] Redirecting HTTP to HTTPS: ${req.url}`);
@@ -62,12 +67,11 @@ app.use(
     saveUninitialized: false,
     rolling: true,
     cookie: {
-      secure: process.env.NODE_ENV === 'production' ? true : false,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 24 * 60 * 60 * 1000,
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Changed to 'lax' for same-site requests
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? 'shakiso-college.onrender.com' : undefined,
     },
     store: sessionStore,
   })
@@ -76,36 +80,36 @@ app.use(
 // Flash messages
 app.use(flash());
 
-// Database connection
-mongoose.set('strictQuery', false);
-
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  }
-};
-
-// Models (assumed to be in ./models)
-const Admin = require('./models/Admin');
-const Announcement = require('./models/Announcement');
-const Photo = require('./models/Photo');
-const Video = require('./models/Video');
+// AWS S3 configuration
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION || 'us-east-1',
+});
 
 // Configure image upload
-const imageStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'public/uploads/images');
-    await fs.mkdir(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
+const imageStorage = process.env.NODE_ENV === 'production' ? 
+  multerS3({
+    s3: s3,
+    bucket: process.env.AWS_S3_BUCKET,
+    acl: 'public-read',
+    metadata: (req, file, cb) => {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: (req, file, cb) => {
+      cb(null, `images/${Date.now()}${path.extname(file.originalname)}`);
+    },
+  }) :
+  multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = path.join(__dirname, 'public/uploads/images');
+      await fs.mkdir(uploadPath, { recursive: true });
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + path.extname(file.originalname));
+    },
+  });
 
 const imageFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
@@ -119,20 +123,32 @@ const imageFilter = (req, file, cb) => {
 const uploadImage = multer({
   storage: imageStorage,
   fileFilter: imageFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 // Configure video upload
-const videoStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'public/uploads/videos');
-    await fs.mkdir(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
+const videoStorage = process.env.NODE_ENV === 'production' ?
+  multerS3({
+    s3: s3,
+    bucket: process.env.AWS_S3_BUCKET,
+    acl: 'public-read',
+    metadata: (req, file, cb) => {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: (req, file, cb) => {
+      cb(null, `videos/${Date.now()}${path.extname(file.originalname)}`);
+    },
+  }) :
+  multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = path.join(__dirname, 'public/uploads/videos');
+      await fs.mkdir(uploadPath, { recursive: true });
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + path.extname(file.originalname));
+    },
+  });
 
 const videoFilter = (req, file, cb) => {
   const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
@@ -146,7 +162,46 @@ const videoFilter = (req, file, cb) => {
 const uploadVideo = multer({
   storage: videoStorage,
   fileFilter: videoFilter,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
+
+// Configure announcement media upload
+const announcementStorage = process.env.NODE_ENV === 'production' ?
+  multerS3({
+    s3: s3,
+    bucket: process.env.AWS_S3_BUCKET,
+    acl: 'public-read',
+    metadata: (req, file, cb) => {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: (req, file, cb) => {
+      cb(null, `announcements/${Date.now()}${path.extname(file.originalname)}`);
+    },
+  }) :
+  multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = path.join(__dirname, 'public/uploads/announcements');
+      await fs.mkdir(uploadPath, { recursive: true });
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + path.extname(file.originalname));
+    },
+  });
+
+const announcementMediaFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/webm', 'video/ogg'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only images (JPEG, JPG, PNG, GIF) or videos (MP4, WebM, OGG) are allowed'), false);
+  }
+};
+
+const uploadAnnouncementMedia = multer({
+  storage: announcementStorage,
+  fileFilter: announcementMediaFilter,
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 // Set EJS as view engine
@@ -181,12 +236,12 @@ function ensureAuthenticated(req, res, next) {
   }
   console.log('Session invalid, destroying session');
   req.session.destroy((err) => {
-    if (err) console.error('Session destroy error:', err);
+    if (err) console.error(`[${new Date().toISOString()}] Session destroy error:`, err);
     res.clearCookie('connect.sid', {
       path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production' ? true : false,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     });
     res.redirect('/admin/login');
   });
@@ -201,6 +256,37 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// Database connection with retry
+mongoose.set('strictQuery', false);
+
+const connectDB = async () => {
+  let retries = 5;
+  while (retries) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+      });
+      console.log('Connected to MongoDB');
+      return;
+    } catch (err) {
+      console.error(`[${new Date().toISOString()}] MongoDB connection error:`, err);
+      retries -= 1;
+      if (retries === 0) {
+        console.error('MongoDB connection failed after retries, exiting...');
+        process.exit(1);
+      }
+      console.log(`Retrying connection (${retries} attempts left)...`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+};
+
+// Models
+const Admin = require('./models/Admin');
+const Announcement = require('./models/Announcement');
+const Photo = require('./models/Photo');
+const Video = require('./models/Video');
+
 // Frontend Routes
 app.get('/', async (req, res) => {
   try {
@@ -209,6 +295,11 @@ app.get('/', async (req, res) => {
       .limit(5);
     const photos = await Photo.find().sort({ createdAt: -1 }).limit(6);
     const videos = await Video.find().sort({ createdAt: -1 }).limit(3);
+    console.log(`[${new Date().toISOString()}] Fetched homepage data:`, {
+      announcementCount: announcements.length,
+      photoCount: photos.length,
+      videoCount: videos.length,
+    });
     res.render('index', {
       announcements,
       photos,
@@ -217,7 +308,7 @@ app.get('/', async (req, res) => {
       messages: req.flash(),
     });
   } catch (err) {
-    console.error('Homepage error:', err);
+    console.error(`[${new Date().toISOString()}] Homepage error:`, err);
     res.status(500).render('error', {
       message: 'Failed to load homepage',
       error: process.env.NODE_ENV === 'development' ? err : {},
@@ -242,13 +333,14 @@ app.get('/contact', (req, res) => {
 app.get('/gallery', async (req, res) => {
   try {
     const photos = await Photo.find().sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched gallery photos:`, { photoCount: photos.length });
     res.render('gallery', {
       photos,
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error('Gallery error:', err);
+    console.error(`[${new Date().toISOString()}] Gallery error:`, err);
     res.status(500).render('error', {
       message: 'Failed to load gallery',
       error: process.env.NODE_ENV === 'development' ? err : {},
@@ -259,13 +351,14 @@ app.get('/gallery', async (req, res) => {
 app.get('/videos', async (req, res) => {
   try {
     const videos = await Video.find().sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched videos:`, { videoCount: videos.length });
     res.render('videos', {
       videos,
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error('Videos error:', err);
+    console.error(`[${new Date().toISOString()}] Videos error:`, err);
     res.status(500).render('error', {
       message: 'Failed to load videos',
       error: process.env.NODE_ENV === 'development' ? err : {},
@@ -276,7 +369,7 @@ app.get('/videos', async (req, res) => {
 // Admin Login Routes
 app.get('/admin/login', (req, res) => {
   if (req.session.user) {
-    console.log('User already logged in, redirecting to dashboard');
+    console.log(`[${new Date().toISOString()}] User already logged in, redirecting to dashboard`);
     return res.redirect('/admin/dashboard');
   }
 
@@ -290,20 +383,20 @@ app.get('/admin/login', (req, res) => {
 app.post('/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log(`Login attempt: { username: '${username}', timestamp: ${new Date().toISOString()} }`);
+    console.log(`[${new Date().toISOString()}] Login attempt: { username: '${username}' }`);
 
     const admin = await Admin.findOne({ username });
     if (!admin) {
-      console.log(`User not found: ${username}`);
+      console.log(`[${new Date().toISOString()}] User not found: ${username}`);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
       return res.redirect('/admin/login');
     }
 
     const isMatch = await admin.comparePassword(password);
-    console.log(`Password match: ${isMatch}`);
+    console.log(`[${new Date().toISOString()}] Password match: ${isMatch}`);
     if (!isMatch) {
-      console.log(`Password mismatch for user: ${username}`);
+      console.log(`[${new Date().toISOString()}] Password mismatch for user: ${username}`);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
       return res.redirect('/admin/login');
@@ -314,7 +407,7 @@ app.post('/admin/login', async (req, res) => {
       username: admin.username,
       role: 'admin',
     };
-    console.log(`Session created: ${JSON.stringify(req.session.user)} | Session ID: ${req.sessionID}`);
+    console.log(`[${new Date().toISOString()}] Session created:`, req.session.user, { sessionID: req.sessionID });
 
     req.session.save((err) => {
       if (err) {
@@ -360,8 +453,8 @@ app.get('/admin/logout', (req, res) => {
     res.clearCookie('connect.sid', {
       path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production' ? true : false,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     });
 
     if (user) {
@@ -397,8 +490,8 @@ app.use('/admin*', (req, res, next) => {
         res.clearCookie('connect.sid', {
           path: '/',
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production' ? true : false,
-          sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         });
         res.redirect('/admin/login');
       });
@@ -436,19 +529,6 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
 });
 
 // Announcements Routes
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads/announcements/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  },
-});
-
-const upload = multer({ storage: storage });
-
-// List Announcements
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
   try {
     const announcements = await Announcement.find().sort({ createdAt: -1 });
@@ -467,7 +547,6 @@ app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// New Announcement Form
 app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
   res.render('admin/edit-announcement', {
     announcement: null,
@@ -476,7 +555,6 @@ app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
   });
 });
 
-// Edit Announcement Form
 app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -496,29 +574,61 @@ app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) =
   }
 });
 
-// Create Announcement
-app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
+app.post('/admin/announcements', ensureAuthenticated, uploadAnnouncementMedia.single('media'), async (req, res) => {
   try {
-    const { title, content, isActive, mediaTitle, mediaDescription, mediaUrl } = req.body;
+    const { title, content, isActive, mediaTitle, mediaDescription, mediaSource, youtubeUrl } = req.body;
+    console.log(`[${new Date().toISOString()}] Creating announcement:`, { title, isActive, mediaSource });
 
-    const newAnnouncement = new Announcement({
+    const announcementData = {
       title,
       content,
-      isActive: isActive === 'on',
-      media: {
+      isActive: isActive === 'on', // Explicitly convert to boolean
+      author: req.session.user.id,
+    };
+
+    if (mediaSource === 'upload' && !req.file) {
+      req.flash('error', 'Please upload a media file');
+      return res.redirect('/admin/announcements/new');
+    }
+
+    if (mediaSource === 'youtube' && !youtubeUrl) {
+      req.flash('error', 'Please provide a YouTube URL');
+      return res.redirect('/admin/announcements/new');
+    }
+
+    if (mediaSource) {
+      announcementData.media = {
         title: mediaTitle,
         description: mediaDescription,
-        url: mediaUrl,
-        type: mediaUrl ? (mediaUrl.includes('youtube') ? 'video' : 'image') : null,
-      },
-      author: req.session.user.id,
-    });
+      };
+      if (mediaSource === 'youtube') {
+        const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+        const match = youtubeUrl.match(regExp);
+        if (!match) {
+          req.flash('error', 'Invalid YouTube URL');
+          return res.redirect('/admin/announcements/new');
+        }
+        announcementData.media.url = `https://www.youtube.com/embed/${match[1]}`;
+        announcementData.media.type = 'video';
+      } else if (req.file) {
+        announcementData.media.url = process.env.NODE_ENV === 'production' ?
+          req.file.location : '/uploads/announcements/' + req.file.filename;
+        announcementData.media.type = req.file.mimetype.startsWith('image') ? 'image' : 'video';
+      }
+    }
 
+    const newAnnouncement = new Announcement(announcementData);
     await newAnnouncement.save();
+    console.log(`[${new Date().toISOString()}] Saved announcement:`, newAnnouncement.toObject());
     req.flash('success', 'Announcement created successfully');
     res.redirect('/admin/announcements');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Create announcement error:`, err);
+    if (req.file && process.env.NODE_ENV !== 'production') {
+      fs.unlink(path.join(__dirname, 'public/uploads/announcements', req.file.filename)).catch((unlinkErr) =>
+        console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
+      );
+    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -531,48 +641,78 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Public Announcements Route
 app.get('/announcements', async (req, res) => {
   try {
     const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched public announcements:`, { count: announcements.length });
     res.render('announcements', {
       announcements,
       currentRoute: 'announcements',
+      messages: req.flash(),
     });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Public announcements error:`, err);
     res.status(500).render('error', {
       message: 'Failed to load announcements',
+      error: process.env.NODE_ENV === 'development' ? err : {},
     });
   }
 });
 
-// Update Announcement
-app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
+app.put('/admin/announcements/:id', ensureAuthenticated, uploadAnnouncementMedia.single('media'), async (req, res) => {
   try {
-    const { title, content, isActive, mediaTitle, mediaDescription, mediaUrl } = req.body;
+    const { title, content, isActive, mediaTitle, mediaDescription, mediaSource, youtubeUrl } = req.body;
+    console.log(`[${new Date().toISOString()}] Updating announcement:`, { id: req.params.id, title, isActive, mediaSource });
 
-    await Announcement.findByIdAndUpdate(
-      req.params.id,
-      {
-        title,
-        content,
-        isActive: isActive === 'on',
-        media: {
-          title: mediaTitle,
-          description: mediaDescription,
-          url: mediaUrl,
-          type: mediaUrl ? (mediaUrl.includes('youtube') ? 'video' : 'image') : null,
-        },
-        updatedAt: Date.now(),
-      },
-      { new: true, runValidators: true }
-    );
+    const updateData = {
+      title,
+      content,
+      isActive: isActive === 'on', // Explicitly convert to boolean
+      updatedAt: Date.now(),
+    };
 
+    if (mediaSource) {
+      updateData.media = {
+        title: mediaTitle,
+        description: mediaDescription,
+      };
+      if (mediaSource === 'youtube') {
+        const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+        const match = youtubeUrl.match(regExp);
+        if (!match) {
+          req.flash('error', 'Invalid YouTube URL');
+          return res.redirect(`/admin/announcements/${req.params.id}/edit`);
+        }
+        updateData.media.url = `https://www.youtube.com/embed/${match[1]}`;
+        updateData.media.type = 'video';
+      } else if (req.file) {
+        updateData.media.url = process.env.NODE_ENV === 'production' ?
+          req.file.location : '/uploads/announcements/' + req.file.filename;
+        updateData.media.type = req.file.mimetype.startsWith('image') ? 'image' : 'video';
+      }
+    }
+
+    const oldAnnouncement = await Announcement.findById(req.params.id);
+    if (oldAnnouncement?.media?.url && req.file && oldAnnouncement.media.type !== 'video' && process.env.NODE_ENV !== 'production') {
+      const oldPath = path.join(__dirname, 'public', oldAnnouncement.media.url);
+      if (fs.existsSync(oldPath)) {
+        fs.unlink(oldPath).catch((unlinkErr) =>
+          console.error(`[${new Date().toISOString()}] Failed to delete old announcement media:`, unlinkErr)
+        );
+      }
+    }
+
+    const updatedAnnouncement = await Announcement.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    console.log(`[${new Date().toISOString()}] Updated announcement:`, updatedAnnouncement.toObject());
     req.flash('success', 'Announcement updated successfully');
     res.redirect('/admin/announcements');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Update announcement error:`, err);
+    if (req.file && process.env.NODE_ENV !== 'production') {
+      fs.unlink(path.join(__dirname, 'public/uploads/announcements', req.file.filename)).catch((unlinkErr) =>
+        console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
+      );
+    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -585,17 +725,39 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Delete Announcement
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
   try {
-    const announcement = await Announcement.findByIdAndDelete(req.params.id);
+    const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
-      return res.status(404).json({ success: false, message: 'Announcement not found' });
+      if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        return res.status(404).json({ success: false, message: 'Announcement not found' });
+      }
+      req.flash('error', 'Announcement not found');
+      return res.redirect('/admin/announcements');
     }
-    return res.json({ success: true, message: 'Announcement deleted successfully' });
+
+    if (announcement.media?.url && announcement.media.type !== 'video' && process.env.NODE_ENV !== 'production') {
+      const filePath = path.join(__dirname, 'public', announcement.media.url);
+      if (fs.existsSync(filePath)) {
+        fs.unlink(filePath).catch((unlinkErr) =>
+          console.error(`[${new Date().toISOString()}] Failed to delete announcement media:`, unlinkErr)
+        );
+      }
+    }
+
+    await Announcement.findByIdAndDelete(req.params.id);
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.json({ success: true, message: 'Announcement deleted successfully' });
+    }
+    req.flash('success', 'Announcement deleted successfully');
+    res.redirect('/admin/announcements');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete announcement error:`, err);
-    return res.status(500).json({ success: false, message: 'Failed to delete announcement' });
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.status(500).json({ success: false, message: 'Failed to delete announcement' });
+    }
+    req.flash('error', 'Failed to delete announcement');
+    res.redirect('/admin/announcements');
   }
 });
 
@@ -603,6 +765,7 @@ app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => 
 app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
   try {
     const photos = await Photo.find().sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched admin photos:`, { photoCount: photos.length });
     res.render('admin/manage-photos', {
       photos,
       user: req.session.user,
@@ -656,17 +819,18 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     const newPhoto = new Photo({
       title,
       description,
-      imageUrl: '/uploads/images/' + req.file.filename,
-      isFeatured: isFeatured === 'on',
+      imageUrl: process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/images/' + req.file.filename,
+      isFeatured: isFeatured === 'on' ? true : false,
       uploadedBy: req.session.user.id,
     });
 
     await newPhoto.save();
+    console.log(`[${new Date().toISOString()}] Saved photo:`, newPhoto.toObject());
     req.flash('success', 'Photo uploaded successfully');
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo upload error:`, err);
-    if (req.file) {
+    if (req.file && process.env.NODE_ENV !== 'production') {
       fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
       );
@@ -689,14 +853,14 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     const updateData = {
       title,
       description,
-      isFeatured: isFeatured === 'on',
+      isFeatured: isFeatured === 'on' ? true : false,
       updatedAt: Date.now(),
     };
 
     if (req.file) {
-      updateData.imageUrl = '/uploads/images/' + req.file.filename;
+      updateData.imageUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/images/' + req.file.filename;
       const oldPhoto = await Photo.findById(req.params.id);
-      if (oldPhoto?.imageUrl) {
+      if (oldPhoto?.imageUrl && process.env.NODE_ENV !== 'production') {
         const oldPath = path.join(__dirname, 'public', oldPhoto.imageUrl);
         if (fs.existsSync(oldPath)) {
           fs.unlink(oldPath).catch((unlinkErr) =>
@@ -706,12 +870,13 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
       }
     }
 
-    await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    const updatedPhoto = await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    console.log(`[${new Date().toISOString()}] Updated photo:`, updatedPhoto.toObject());
     req.flash('success', 'Photo updated successfully');
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo update error:`, err);
-    if (req.file) {
+    if (req.file && process.env.NODE_ENV !== 'production') {
       fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
       );
@@ -732,30 +897,38 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
   try {
     const photo = await Photo.findById(req.params.id);
     if (!photo) {
-      return res.status(404).json({ success: false, message: 'Photo not found' });
+      if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        return res.status(404).json({ success: false, message: 'Photo not found' });
+      }
+      req.flash('error', 'Photo not found');
+      return res.redirect('/admin/photos');
     }
 
-    const filePath = photo.imageUrl ? path.join(__dirname, 'public', photo.imageUrl) : null;
-    await Photo.findByIdAndDelete(req.params.id);
-
-    let fileDeleted = false;
-    if (filePath && fs.existsSync(filePath)) {
-      try {
-        await fs.unlink(filePath);
-        fileDeleted = true;
-      } catch (unlinkErr) {
-        console.error(`[${new Date().toISOString()}] File deletion error:`, unlinkErr);
+    if (photo.imageUrl && process.env.NODE_ENV !== 'production') {
+      const filePath = path.join(__dirname, 'public', photo.imageUrl);
+      if (fs.existsSync(filePath)) {
+        fs.unlink(filePath).catch((unlinkErr) =>
+          console.error(`[${new Date().toISOString()}] Failed to delete photo file:`, unlinkErr)
+        );
       }
     }
 
-    return res.json({
-      success: true,
-      message: 'Photo deleted successfully',
-      fileDeleted: fileDeleted,
-    });
+    await Photo.findByIdAndDelete(req.params.id);
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.json({
+        success: true,
+        message: 'Photo deleted successfully',
+      });
+    }
+    req.flash('success', 'Photo deleted successfully');
+    res.redirect('/admin/photos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete photo error:`, err);
-    return res.status(500).json({ success: false, message: 'Failed to delete photo' });
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.status(500).json({ success: false, message: 'Failed to delete photo' });
+    }
+    req.flash('error', 'Failed to delete photo');
+    res.redirect('/admin/photos');
   }
 });
 
@@ -763,6 +936,7 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
 app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
   try {
     const videos = await Video.find().sort({ createdAt: -1 });
+    console.log(`[${new Date().toISOString()}] Fetched admin videos:`, { videoCount: videos.length });
     res.render('admin/manage-videos', {
       videos,
       user: req.session.user,
@@ -808,6 +982,7 @@ app.get('/admin/videos/:id/edit', ensureAuthenticated, async (req, res) => {
 app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
   try {
     const { title, description, isFeatured, source, youtubeUrl } = req.body;
+    console.log(`[${new Date().toISOString()}] Creating video:`, { title, source });
 
     if (source === 'upload' && !req.file) {
       req.flash('error', 'Please upload a video file');
@@ -822,7 +997,7 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
     const videoData = {
       title,
       description,
-      isFeatured: isFeatured === 'on',
+      isFeatured: isFeatured === 'on' ? true : false,
       uploadedBy: req.session.user.id,
       source,
     };
@@ -836,15 +1011,17 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
       }
       videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
     } else {
-      videoData.videoUrl = '/uploads/videos/' + req.file.filename;
+      videoData.videoUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/videos/' + req.file.filename;
     }
 
-    await new Video(videoData).save();
+    const newVideo = new Video(videoData);
+    await newVideo.save();
+    console.log(`[${new Date().toISOString()}] Saved video:`, newVideo.toObject());
     req.flash('success', 'Video added successfully');
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video upload error:`, err);
-    if (req.file) {
+    if (req.file && process.env.NODE_ENV !== 'production') {
       fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
       );
@@ -864,8 +1041,9 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
 app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
   try {
     const { title, description, isFeatured, source, youtubeUrl } = req.body;
-    const video = await Video.findById(req.params.id);
+    console.log(`[${new Date().toISOString()}] Updating video:`, { id: req.params.id, title, source });
 
+    const video = await Video.findById(req.params.id);
     if (!video) {
       req.flash('error', 'Video not found');
       return res.redirect('/admin/videos');
@@ -874,7 +1052,7 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
     const updateData = {
       title,
       description,
-      isFeatured: isFeatured === 'on',
+      isFeatured: isFeatured === 'on' ? true : false,
       updatedAt: Date.now(),
       source,
     };
@@ -888,7 +1066,7 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
       }
       updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
 
-      if (video.source === 'upload' && video.videoUrl) {
+      if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
         const oldPath = path.join(__dirname, 'public', video.videoUrl);
         if (fs.existsSync(oldPath)) {
           fs.unlink(oldPath).catch((unlinkErr) =>
@@ -897,9 +1075,9 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
         }
       }
     } else if (req.file) {
-      updateData.videoUrl = '/uploads/videos/' + req.file.filename;
+      updateData.videoUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/videos/' + req.file.filename;
 
-      if (video.source === 'upload' && video.videoUrl) {
+      if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
         const oldPath = path.join(__dirname, 'public', video.videoUrl);
         if (fs.existsSync(oldPath)) {
           fs.unlink(oldPath).catch((unlinkErr) =>
@@ -911,12 +1089,13 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
       updateData.videoUrl = video.videoUrl;
     }
 
-    await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    const updatedVideo = await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    console.log(`[${new Date().toISOString()}] Updated video:`, updatedVideo.toObject());
     req.flash('success', 'Video updated successfully');
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video update error:`, err);
-    if (req.file) {
+    if (req.file && process.env.NODE_ENV !== 'production') {
       fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
       );
@@ -935,8 +1114,16 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
 
 app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
   try {
-    const video = await Video.findByIdAndDelete(req.params.id);
-    if (video && video.source === 'upload' && video.videoUrl) {
+    const video = await Video.findById(req.params.id);
+    if (!video) {
+      if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      req.flash('error', 'Video not found');
+      return res.redirect('/admin/videos');
+    }
+
+    if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
       const filePath = path.join(__dirname, 'public', video.videoUrl);
       if (fs.existsSync(filePath)) {
         fs.unlink(filePath).catch((unlinkErr) =>
@@ -944,10 +1131,18 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
         );
       }
     }
+
+    await Video.findByIdAndDelete(req.params.id);
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.json({ success: true, message: 'Video deleted successfully' });
+    }
     req.flash('success', 'Video deleted successfully');
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete video error:`, err);
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.status(500).json({ success: false, message: 'Failed to delete video' });
+    }
     req.flash('error', 'Failed to delete video');
     res.redirect('/admin/videos');
   }
@@ -962,12 +1157,11 @@ app.post('/contact', async (req, res) => {
       return res.redirect('/contact');
     }
 
-    console.log('New contact form submission:', {
+    console.log(`[${new Date().toISOString()}] New contact form submission:`, {
       name,
       email,
       subject,
       message,
-      date: new Date(),
     });
 
     req.flash('success', 'Thank you for your message! We will contact you soon.');
@@ -1025,7 +1219,7 @@ app.use((err, req, res, next) => {
     await connectDB();
     await initializeAdmin();
 
-    const PORT = process.env.PORT || 10000; // Use 10000 for Render
+    const PORT = process.env.PORT || 10000;
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

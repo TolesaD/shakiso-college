@@ -1,39 +1,99 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%- include('partials/head', {title: 'Video Gallery'}) %>
+    <%- include('partials/head', {title: 'Videos'}) %>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        .video-card {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .video-card:hover {
+            transform: translateY(-5px);
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+        }
+        .video-container iframe,
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .video-info {
+            padding: 1.5rem;
+        }
+        .video-info h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 <body>
     <%- include('partials/header', {user}) %>
     
-    <section class="hero" style="background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/videos-bg.jpg');">
+    <main>
         <div class="container">
-            <div class="hero-content">
-                <h1>Video Gallery</h1>
-                <p>Watch our campus tours, events, and educational content.</p>
-            </div>
-        </div>
-    </section>
+            <% if (messages.success && messages.success.length > 0) { %>
+                <% messages.success.forEach(message => { %>
+                    <div class="alert alert-success"><%= message %></div>
+                <% }) %>
+            <% } %>
+            <% if (messages.error && messages.error.length > 0) { %>
+                <% messages.error.forEach(message => { %>
+                    <div class="alert alert-danger"><%= message %></div>
+                <% }) %>
+            <% } %>
 
-    <section class="section">
-        <div class="container">
+            <h1>Video Gallery</h1>
             <div class="video-grid">
-                <% if (videos.length > 0) { %>
+                <% console.log('Videos:', videos); %>
+                <% if (videos && videos.length > 0) { %>
                     <% videos.forEach(video => { %>
                         <div class="video-card">
                             <div class="video-container">
-                                <% if (video.isYoutube) { %>
-                                    <iframe src="<%= video.videoPath %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                <% if (video.source === 'youtube') { %>
+                                    <iframe src="<%= video.videoUrl %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                                 <% } else { %>
-                                    <video controls>
-                                        <source src="<%= video.videoPath %>" type="video/mp4">
+                                    <video controls onerror="console.error('Failed to load video: <%= video.videoUrl %>')">
+                                        <source src="<%= video.videoUrl %>" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 <% } %>
                             </div>
                             <div class="video-info">
-                                <h3><%= video.title %></h3>
+                                <h3><%= video.title || 'Untitled' %></h3>
                                 <% if (video.description) { %>
                                     <p><%= video.description %></p>
                                 <% } %>
@@ -41,11 +101,11 @@
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <p>No videos available in the gallery.</p>
+                    <p>No videos available.</p>
                 <% } %>
             </div>
         </div>
-    </section>
+    </main>
 
     <%- include('partials/footer') %>
     <script src="/js/main.js"></script>
