@@ -9,21 +9,26 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const methodOverride = require('method-override');
-const AWS = require('aws-sdk');
-const multerS3 = require('multer-s3');
 
 // Initialize Express app
 const app = express();
 
 // Load environment variables
 require('dotenv').config();
+
+// Validate required environment variables
+const requiredEnvVars = ['MONGODB_URI', 'SESSION_SECRET', 'ADMIN_USERNAME', 'ADMIN_PASSWORD', 'ADMIN_EMAIL'];
+requiredEnvVars.forEach((varName) => {
+  if (!process.env[varName]) {
+    console.error(`[${new Date().toISOString()}] Error: Environment variable ${varName} is not set`);
+    process.exit(1);
+  }
+});
+
 console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
-console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
-console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Not set');
-console.log('AWS_S3_BUCKET:', process.env.AWS_S3_BUCKET ? 'Set' : 'Not set');
 
 // HTTPS redirection for production
 if (process.env.NODE_ENV === 'production') {
@@ -62,7 +67,7 @@ sessionStore.on('connected', () => {
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     rolling: true,
@@ -80,36 +85,31 @@ app.use(
 // Flash messages
 app.use(flash());
 
-// AWS S3 configuration
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION || 'us-east-1',
+// Ensure upload directories exist
+const imageDir = process.env.NODE_ENV === 'production' 
+  ? '/opt/render/project/src/public/uploads/images' 
+  : path.join(__dirname, 'public/uploads/images');
+const videoDir = process.env.NODE_ENV === 'production' 
+  ? '/opt/render/project/src/public/uploads/videos' 
+  : path.join(__dirname, 'public/uploads/videos');
+[imageDir, videoDir].forEach(async (dir) => {
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    console.log(`[${new Date().toISOString()}] Created directory: ${dir}`);
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Failed to create directory ${dir}:`, err);
+  }
 });
 
 // Configure image upload
-const imageStorage = process.env.NODE_ENV === 'production' ? 
-  multerS3({
-    s3: s3,
-    bucket: process.env.AWS_S3_BUCKET,
-    acl: 'public-read',
-    metadata: (req, file, cb) => {
-      cb(null, { fieldName: file.fieldname });
-    },
-    key: (req, file, cb) => {
-      cb(null, `images/${Date.now()}${path.extname(file.originalname)}`);
-    },
-  }) :
-  multer.diskStorage({
-    destination: async (req, file, cb) => {
-      const uploadPath = path.join(__dirname, 'public/uploads/images');
-      await fs.mkdir(uploadPath, { recursive: true });
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      cb(null, Date.now() + path.extname(file.originalname));
-    },
-  });
+const imageStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    cb(null, imageDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
 
 const imageFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
@@ -127,28 +127,14 @@ const uploadImage = multer({
 });
 
 // Configure video upload
-const videoStorage = process.env.NODE_ENV === 'production' ?
-  multerS3({
-    s3: s3,
-    bucket: process.env.AWS_S3_BUCKET,
-    acl: 'public-read',
-    metadata: (req, file, cb) => {
-      cb(null, { fieldName: file.fieldname });
-    },
-    key: (req, file, cb) => {
-      cb(null, `videos/${Date.now()}${path.extname(file.originalname)}`);
-    },
-  }) :
-  multer.diskStorage({
-    destination: async (req, file, cb) => {
-      const uploadPath = path.join(__dirname, 'public/uploads/videos');
-      await fs.mkdir(uploadPath, { recursive: true });
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      cb(null, Date.now() + path.extname(file.originalname));
-    },
-  });
+const videoStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    cb(null, videoDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
 
 const videoFilter = (req, file, cb) => {
   const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
@@ -699,7 +685,7 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     const newPhoto = new Photo({
       title,
       description,
-      imageUrl: process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/images/' + req.file.filename,
+      imageUrl: `/uploads/images/${req.file.filename}`,
       isFeatured: isFeatured === 'on' ? true : false,
       uploadedBy: req.session.user.id,
     });
@@ -710,8 +696,8 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo upload error:`, err);
-    if (req.file && process.env.NODE_ENV !== 'production') {
-      fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename)).catch((unlinkErr) =>
+    if (req.file) {
+      fs.unlink(path.join(imageDir, req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
       );
     }
@@ -739,9 +725,9 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     };
 
     if (req.file) {
-      updateData.imageUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/images/' + req.file.filename;
+      updateData.imageUrl = `/uploads/images/${req.file.filename}`;
       const oldPhoto = await Photo.findById(req.params.id);
-      if (oldPhoto?.imageUrl && process.env.NODE_ENV !== 'production') {
+      if (oldPhoto?.imageUrl) {
         const oldPath = path.join(__dirname, 'public', oldPhoto.imageUrl);
         await fs.unlink(oldPath).catch((unlinkErr) =>
           console.error(`[${new Date().toISOString()}] Failed to delete old image:`, unlinkErr)
@@ -772,8 +758,8 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo update error:`, err);
-    if (req.file && process.env.NODE_ENV !== 'production') {
-      fs.unlink(path.join(__dirname, 'public/uploads/images', req.file.filename)).catch((unlinkErr) =>
+    if (req.file) {
+      fs.unlink(path.join(imageDir, req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
       );
     }
@@ -800,7 +786,7 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Photo not found' });
     }
 
-    if (photo.imageUrl && process.env.NODE_ENV !== 'production') {
+    if (photo.imageUrl) {
       const filePath = path.join(__dirname, 'public', photo.imageUrl);
       await fs.unlink(filePath).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete photo file:`, unlinkErr)
@@ -895,7 +881,7 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
       }
       videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
     } else {
-      videoData.videoUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/videos/' + req.file.filename;
+      videoData.videoUrl = `/uploads/videos/${req.file.filename}`;
     }
 
     const newVideo = new Video(videoData);
@@ -905,8 +891,8 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video upload error:`, err);
-    if (req.file && process.env.NODE_ENV !== 'production') {
-      fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
+    if (req.file) {
+      fs.unlink(path.join(videoDir, req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
       );
     }
@@ -950,16 +936,16 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
       }
       updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
 
-      if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
+      if (video.source === 'upload' && video.videoUrl) {
         const oldPath = path.join(__dirname, 'public', video.videoUrl);
         await fs.unlink(oldPath).catch((unlinkErr) =>
           console.error(`[${new Date().toISOString()}] Failed to delete old video:`, unlinkErr)
         );
       }
     } else if (req.file) {
-      updateData.videoUrl = process.env.NODE_ENV === 'production' ? req.file.location : '/uploads/videos/' + req.file.filename;
+      updateData.videoUrl = `/uploads/videos/${req.file.filename}`;
 
-      if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
+      if (video.source === 'upload' && video.videoUrl) {
         const oldPath = path.join(__dirname, 'public', video.videoUrl);
         await fs.unlink(oldPath).catch((unlinkErr) =>
           console.error(`[${new Date().toISOString()}] Failed to delete old video:`, unlinkErr)
@@ -975,8 +961,8 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video update error:`, err);
-    if (req.file && process.env.NODE_ENV !== 'production') {
-      fs.unlink(path.join(__dirname, 'public/uploads/videos', req.file.filename)).catch((unlinkErr) =>
+    if (req.file) {
+      fs.unlink(path.join(videoDir, req.file.filename)).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
       );
     }
@@ -1000,7 +986,7 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Video not found' });
     }
 
-    if (video.source === 'upload' && video.videoUrl && process.env.NODE_ENV !== 'production') {
+    if (video.source === 'upload' && video.videoUrl) {
       const filePath = path.join(__dirname, 'public', video.videoUrl);
       await fs.unlink(filePath).catch((unlinkErr) =>
         console.error(`[${new Date().toISOString()}] Failed to delete video file:`, unlinkErr)
