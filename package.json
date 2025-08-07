@@ -18,6 +18,8 @@
   "author": "Shakiso Poly-Technic College",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.862.0",
+    "@aws-sdk/s3-request-presigner": "^3.862.0",
     "bcryptjs": "^2.4.3",
     "body-parser": "1.20.2",
     "connect-flash": "^0.1.1",
@@ -37,6 +39,7 @@
     "method-override": "^3.0.0",
     "mongoose": "^7.8.7",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
     "punycode": "^2.3.1",
     "raw-body": "2.5.2"
   },

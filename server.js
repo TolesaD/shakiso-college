@@ -7,8 +7,10 @@ const flash = require('connect-flash');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
 const methodOverride = require('method-override');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const cron = require('node-cron');
 
 // Initialize Express app
 const app = express();
@@ -17,7 +19,7 @@ const app = express();
 require('dotenv').config();
 
 // Validate required environment variables
-const requiredEnvVars = ['MONGODB_URI', 'SESSION_SECRET', 'ADMIN_USERNAME', 'ADMIN_PASSWORD', 'ADMIN_EMAIL'];
+const requiredEnvVars = ['MONGODB_URI', 'SESSION_SECRET', 'ADMIN_USERNAME', 'ADMIN_PASSWORD', 'ADMIN_EMAIL', 'B2_KEY_ID', 'B2_APPLICATION_KEY', 'B2_ENDPOINT', 'B2_BUCKET_NAME'];
 requiredEnvVars.forEach((varName) => {
   if (!process.env[varName]) {
     console.error(`[${new Date().toISOString()}] Error: Environment variable ${varName} is not set`);
@@ -29,6 +31,10 @@ console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not 
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
+console.log('B2_KEY_ID:', process.env.B2_KEY_ID ? 'Set' : 'Not set');
+console.log('B2_APPLICATION_KEY:', process.env.B2_APPLICATION_KEY ? 'Set' : 'Not set');
+console.log('B2_ENDPOINT:', process.env.B2_ENDPOINT);
+console.log('B2_BUCKET_NAME:', process.env.B2_BUCKET_NAME);
 
 // HTTPS redirection for production
 if (process.env.NODE_ENV === 'production') {
@@ -85,32 +91,17 @@ app.use(
 // Flash messages
 app.use(flash());
 
-// Ensure upload directories exist
-const imageDir = process.env.NODE_ENV === 'production' 
-  ? '/opt/render/project/src/public/uploads/images' 
-  : path.join(__dirname, 'public/uploads/images');
-const videoDir = process.env.NODE_ENV === 'production' 
-  ? '/opt/render/project/src/public/uploads/videos' 
-  : path.join(__dirname, 'public/uploads/videos');
-[imageDir, videoDir].forEach(async (dir) => {
-  try {
-    await fs.mkdir(dir, { recursive: true });
-    console.log(`[${new Date().toISOString()}] Created directory: ${dir}`);
-  } catch (err) {
-    console.error(`[${new Date().toISOString()}] Failed to create directory ${dir}:`, err);
-  }
+// Configure Backblaze B2
+const s3 = new S3Client({
+  region: 'us-west-000',
+  endpoint: process.env.B2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.B2_KEY_ID,
+    secretAccessKey: process.env.B2_APPLICATION_KEY,
+  },
 });
 
 // Configure image upload
-const imageStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    cb(null, imageDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
-  },
-});
-
 const imageFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
   if (allowedTypes.includes(file.mimetype)) {
@@ -121,21 +112,12 @@ const imageFilter = (req, file, cb) => {
 };
 
 const uploadImage = multer({
-  storage: imageStorage,
+  storage: multer.memoryStorage(),
   fileFilter: imageFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 // Configure video upload
-const videoStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    cb(null, videoDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
-  },
-});
-
 const videoFilter = (req, file, cb) => {
   const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
   if (allowedTypes.includes(file.mimetype)) {
@@ -146,10 +128,26 @@ const videoFilter = (req, file, cb) => {
 };
 
 const uploadVideo = multer({
-  storage: videoStorage,
+  storage: multer.memoryStorage(),
   fileFilter: videoFilter,
   limits: { fileSize: 50 * 1024 * 1024 },
 });
+
+// Upload to Backblaze B2 and generate signed URL
+async function uploadToB2(file, folder) {
+  const key = `${folder}/${Date.now()}${path.extname(file.originalname)}`;
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.B2_BUCKET_NAME,
+    Key: key,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  }));
+  const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+    Bucket: process.env.B2_BUCKET_NAME,
+    Key: key,
+  }), { expiresIn: 604800 }); // 7 days
+  return { signedUrl, key };
+}
 
 // Database connection
 mongoose.set('strictQuery', false);
@@ -682,11 +680,13 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     }
 
     const { title, description, isFeatured } = req.body;
+    const { signedUrl, key } = await uploadToB2(req.file, 'images');
     const newPhoto = new Photo({
       title,
       description,
-      imageUrl: `/uploads/images/${req.file.filename}`,
-      isFeatured: isFeatured === 'on' ? true : false,
+      imageUrl: signedUrl,
+      b2Key: key,
+      isFeatured: isFeatured === 'on',
       uploadedBy: req.session.user.id,
     });
 
@@ -696,11 +696,6 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     res.redirect('/admin/photos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo upload error:`, err);
-    if (req.file) {
-      fs.unlink(path.join(imageDir, req.file.filename)).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
-      );
-    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -713,26 +708,21 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
   }
 });
 
-app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res, next) => {
+app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
   try {
     console.log(`[${new Date().toISOString()}] Updating photo:`, { id: req.params.id, session: req.sessionID });
     const { title, description, isFeatured } = req.body;
     const updateData = {
       title,
       description,
-      isFeatured: isFeatured === 'on' ? true : false,
+      isFeatured: isFeatured === 'on',
       updatedAt: Date.now(),
     };
 
     if (req.file) {
-      updateData.imageUrl = `/uploads/images/${req.file.filename}`;
-      const oldPhoto = await Photo.findById(req.params.id);
-      if (oldPhoto?.imageUrl) {
-        const oldPath = path.join(__dirname, 'public', oldPhoto.imageUrl);
-        await fs.unlink(oldPath).catch((unlinkErr) =>
-          console.error(`[${new Date().toISOString()}] Failed to delete old image:`, unlinkErr)
-        );
-      }
+      const { signedUrl, key } = await uploadToB2(req.file, 'images');
+      updateData.imageUrl = signedUrl;
+      updateData.b2Key = key;
     }
 
     const updatedPhoto = await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
@@ -743,26 +733,18 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     }
     console.log(`[${new Date().toISOString()}] Updated photo:`, updatedPhoto.toObject());
     req.flash('success', 'Photo updated successfully');
-    console.log(`[${new Date().toISOString()}] Flash messages set:`, req.flash());
 
-    // Explicitly save session before redirect
     req.session.save((err) => {
       if (err) {
         console.error(`[${new Date().toISOString()}] Session save error:`, err);
         req.flash('error', 'Failed to save session');
         return res.redirect(`/admin/photos/${req.params.id}/edit`);
       }
-      // Add cache-control headers to ensure fresh page load
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.redirect('/admin/photos');
     });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Photo update error:`, err);
-    if (req.file) {
-      fs.unlink(path.join(imageDir, req.file.filename)).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete uploaded file:`, unlinkErr)
-      );
-    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -784,13 +766,6 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
     if (!photo) {
       console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
       return res.status(404).json({ success: false, message: 'Photo not found' });
-    }
-
-    if (photo.imageUrl) {
-      const filePath = path.join(__dirname, 'public', photo.imageUrl);
-      await fs.unlink(filePath).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete photo file:`, unlinkErr)
-      );
     }
 
     await Photo.findByIdAndDelete(req.params.id);
@@ -867,7 +842,7 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
     const videoData = {
       title,
       description,
-      isFeatured: isFeatured === 'on' ? true : false,
+      isFeatured: isFeatured === 'on',
       uploadedBy: req.session.user.id,
       source,
     };
@@ -881,7 +856,9 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
       }
       videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
     } else {
-      videoData.videoUrl = `/uploads/videos/${req.file.filename}`;
+      const { signedUrl, key } = await uploadToB2(req.file, 'videos');
+      videoData.videoUrl = signedUrl;
+      videoData.b2Key = key;
     }
 
     const newVideo = new Video(videoData);
@@ -891,11 +868,6 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video upload error:`, err);
-    if (req.file) {
-      fs.unlink(path.join(videoDir, req.file.filename)).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
-      );
-    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -922,7 +894,7 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
     const updateData = {
       title,
       description,
-      isFeatured: isFeatured === 'on' ? true : false,
+      isFeatured: isFeatured === 'on',
       updatedAt: Date.now(),
       source,
     };
@@ -935,24 +907,14 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
         return res.redirect(`/admin/videos/${req.params.id}/edit`);
       }
       updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
-
-      if (video.source === 'upload' && video.videoUrl) {
-        const oldPath = path.join(__dirname, 'public', video.videoUrl);
-        await fs.unlink(oldPath).catch((unlinkErr) =>
-          console.error(`[${new Date().toISOString()}] Failed to delete old video:`, unlinkErr)
-        );
-      }
+      updateData.b2Key = null;
     } else if (req.file) {
-      updateData.videoUrl = `/uploads/videos/${req.file.filename}`;
-
-      if (video.source === 'upload' && video.videoUrl) {
-        const oldPath = path.join(__dirname, 'public', video.videoUrl);
-        await fs.unlink(oldPath).catch((unlinkErr) =>
-          console.error(`[${new Date().toISOString()}] Failed to delete old video:`, unlinkErr)
-        );
-      }
+      const { signedUrl, key } = await uploadToB2(req.file, 'videos');
+      updateData.videoUrl = signedUrl;
+      updateData.b2Key = key;
     } else {
       updateData.videoUrl = video.videoUrl;
+      updateData.b2Key = video.b2Key;
     }
 
     const updatedVideo = await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
@@ -961,11 +923,6 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
     res.redirect('/admin/videos');
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Video update error:`, err);
-    if (req.file) {
-      fs.unlink(path.join(videoDir, req.file.filename)).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete uploaded video:`, unlinkErr)
-      );
-    }
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
@@ -986,19 +943,70 @@ app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Video not found' });
     }
 
-    if (video.source === 'upload' && video.videoUrl) {
-      const filePath = path.join(__dirname, 'public', video.videoUrl);
-      await fs.unlink(filePath).catch((unlinkErr) =>
-        console.error(`[${new Date().toISOString()}] Failed to delete video file:`, unlinkErr)
-      );
-    }
-
     await Video.findByIdAndDelete(req.params.id);
     console.log(`[${new Date().toISOString()}] Deleted video:`, req.params.id);
     return res.json({ success: true, message: 'Video deleted successfully' });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Delete video error:`, err);
     return res.status(500).json({ success: false, message: 'Failed to delete video' });
+  }
+});
+
+// Refresh signed URLs
+app.get('/admin/refresh-urls', ensureAuthenticated, async (req, res) => {
+  try {
+    const photos = await Photo.find({ b2Key: { $exists: true } });
+    for (const photo of photos) {
+      const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: photo.b2Key,
+      }), { expiresIn: 604800 });
+      photo.imageUrl = signedUrl;
+      await photo.save();
+    }
+    const videos = await Video.find({ b2Key: { $exists: true } });
+    for (const video of videos) {
+      const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: video.b2Key,
+      }), { expiresIn: 604800 });
+      video.videoUrl = signedUrl;
+      await video.save();
+    }
+    console.log(`[${new Date().toISOString()}] Refreshed signed URLs`);
+    req.flash('success', 'Signed URLs refreshed successfully');
+    res.redirect('/admin');
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Error refreshing URLs:`, err);
+    req.flash('error', 'Error refreshing URLs');
+    res.redirect('/admin');
+  }
+});
+
+// Cron job to refresh signed URLs daily
+cron.schedule('0 0 * * *', async () => {
+  try {
+    const photos = await Photo.find({ b2Key: { $exists: true } });
+    for (const photo of photos) {
+      const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: photo.b2Key,
+      }), { expiresIn: 604800 });
+      photo.imageUrl = signedUrl;
+      await photo.save();
+    }
+    const videos = await Video.find({ b2Key: { $exists: true } });
+    for (const video of videos) {
+      const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: video.b2Key,
+      }), { expiresIn: 604800 });
+      video.videoUrl = signedUrl;
+      await video.save();
+    }
+    console.log(`[${new Date().toISOString()}] Refreshed signed URLs via cron`);
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Cron URL refresh error:`, err);
   }
 });
 
