@@ -27,7 +27,9 @@ requiredEnvVars.forEach((varName) => {
   }
 });
 
-console.log('Loaded ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
+console.log('Loaded ADMIN_USERNAME:', process.env.ADMIN_USERNAME);
+console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
+console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
@@ -68,7 +70,7 @@ sessionStore.on('error', (err) => {
 });
 
 sessionStore.on('connected', () => {
-  console.log('Session store connected to MongoDB');
+  console.log(`[${new Date().toISOString()}] Session store connected to MongoDB`);
 });
 
 app.use(
@@ -79,7 +81,7 @@ app.use(
     rolling: true,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
@@ -87,6 +89,17 @@ app.use(
     store: sessionStore,
   })
 );
+
+// Log session middleware details for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] Session middleware:`, {
+    sessionID: req.sessionID,
+    cookie: req.cookies['connect.sid'] || 'none',
+    user: req.session.user || 'none',
+    path: req.path,
+  });
+  next();
+});
 
 // Flash messages
 app.use(flash());
@@ -175,13 +188,10 @@ const connectDB = async () => {
       await mongoose.connect(process.env.MONGODB_URI, {
         serverSelectionTimeoutMS: 5000,
       });
-      console.log('Connected to MongoDB');
+      console.log(`[${new Date().toISOString()}] Connected to MongoDB`);
       // Ensure indexes for Video and Photo collections
       await mongoose.model('Video').createIndexes();
       await mongoose.model('Photo').createIndexes();
-      // Clear sessions collection on startup
-      await mongoose.connection.collection('sessions').deleteMany({});
-      console.log(`[${new Date().toISOString()}] Cleared sessions collection on startup`);
       return;
     } catch (err) {
       console.error(`[${new Date().toISOString()}] MongoDB connection error:`, {
@@ -192,7 +202,7 @@ const connectDB = async () => {
       });
       retries -= 1;
       if (retries === 0) {
-        console.error('MongoDB connection failed after retries, exiting...');
+        console.error(`[${new Date().toISOString()}] MongoDB connection failed after retries, exiting...`);
         process.exit(1);
       }
       console.log(`Retrying connection (${retries} attempts left)...`);
@@ -235,18 +245,19 @@ app.use((req, res, next) => {
 
 // Authentication middleware
 function ensureAuthenticated(req, res, next) {
-  console.log('Checking session:', {
+  console.log(`[${new Date().toISOString()}] ensureAuthenticated:`, {
     sessionID: req.sessionID,
-    user: req.session.user,
-    cookies: req.cookies || 'No cookies',
+    cookie: req.cookies['connect.sid'] || 'none',
+    user: req.session.user || 'none',
     sessionExists: !!req.session,
+    path: req.path,
   });
   if (req.session.user && req.session.user.role === 'admin') {
-    req.session.touch();
-    console.log('Session valid, proceeding to next middleware');
+    req.session.touch(); // Extend session expiry
+    console.log(`[${new Date().toISOString()}] Session valid, proceeding`);
     return next();
   }
-  console.log('Session invalid, destroying session');
+  console.log(`[${new Date().toISOString()}] Session invalid, destroying session`);
   req.session.destroy((err) => {
     if (err) console.error(`[${new Date().toISOString()}] Session destroy error:`, err);
     res.clearCookie('connect.sid', {
@@ -258,6 +269,41 @@ function ensureAuthenticated(req, res, next) {
     res.redirect('/admin/login');
   });
 }
+
+// Session Verification Middleware
+app.use('/admin/*', (req, res, next) => {
+  if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
+    return next();
+  }
+  if (!req.sessionID || !req.cookies || !req.cookies['connect.sid']) {
+    console.log(`[${new Date().toISOString()}] No session ID or connect.sid cookie, redirecting to login`);
+    return res.redirect('/admin/login');
+  }
+  sessionStore.get(req.sessionID, (err, session) => {
+    console.log(`[${new Date().toISOString()}] Session store check:`, {
+      sessionID: req.sessionID,
+      sessionExists: !!session,
+      error: err,
+      cookies: req.cookies,
+    });
+    if (err || !session) {
+      console.log(`[${new Date().toISOString()}] Session not found in store, redirecting to login`);
+      req.session.destroy((destroyErr) => {
+        if (destroyErr) console.error(`[${new Date().toISOString()}] Session destroy error:`, destroyErr);
+        res.clearCookie('connect.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        });
+        res.redirect('/admin/login');
+      });
+    } else {
+      console.log(`[${new Date().toISOString()}] Session found:`, session);
+      next();
+    }
+  });
+});
 
 // Multer error handling middleware
 app.use((err, req, res, next) => {
@@ -338,7 +384,7 @@ app.get('/announcements', async (req, res) => {
         title: announcements[0].title,
         content: announcements[0].content ? announcements[0].content.substring(0, 50) + '...' : null,
         isActive: announcements[0].isActive,
-        createdAt: announcements[0].createdAt
+        createdAt: announcements[0].createdAt,
       } : null,
       duration: `${Date.now() - startTime}ms`,
     });
@@ -384,7 +430,7 @@ app.get('/gallery', async (req, res) => {
       sample: photos.length > 0 ? {
         title: photos[0].title,
         imageUrl: photos[0].imageUrl ? photos[0].imageUrl.substring(0, 50) + '...' : null,
-        createdAt: photos[0].createdAt
+        createdAt: photos[0].createdAt,
       } : null,
       duration: `${Date.now() - startTime}ms`,
     });
@@ -457,7 +503,6 @@ app.get('/admin/login', (req, res) => {
     console.log(`[${new Date().toISOString()}] User already logged in, redirecting to dashboard`);
     return res.redirect('/admin/dashboard');
   }
-
   res.render('admin/login', {
     error: req.flash('error'),
     success: req.query.logout === 'success' ? ['You have been logged out successfully'] : req.flash('success'),
@@ -469,7 +514,7 @@ app.post('/admin/login', async (req, res) => {
   const startTime = Date.now();
   try {
     const { username, password } = req.body;
-    console.log(`[${new Date().toISOString()}] Login attempt:`, { username });
+    console.log(`[${new Date().toISOString()}] Login attempt:`, { username, sessionID: req.sessionID });
 
     const admin = await Admin.findOne({ username });
     if (!admin) {
@@ -501,7 +546,8 @@ app.post('/admin/login', async (req, res) => {
       username: admin.username,
       role: 'admin',
     };
-    console.log(`[${new Date().toISOString()}] Session created:`, req.session.user, {
+    console.log(`[${new Date().toISOString()}] Session created:`, {
+      user: req.session.user,
       sessionID: req.sessionID,
       duration: `${Date.now() - startTime}ms`,
     });
@@ -513,6 +559,13 @@ app.post('/admin/login', async (req, res) => {
         return res.redirect('/admin/login');
       }
       console.log(`[${new Date().toISOString()}] Session saved successfully. Session ID:`, req.sessionID);
+      res.cookie('connect.sid', req.sessionID, {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000,
+      });
       sessionStore.get(req.sessionID, (err, session) => {
         if (err || !session) {
           console.error(`[${new Date().toISOString()}] Session not found in store:`, err);
@@ -566,43 +619,6 @@ app.get('/admin/logout', (req, res) => {
     }
 
     safeRedirect('/admin/login?logout=success');
-  });
-});
-
-// Session Verification Middleware
-app.use('/admin*', (req, res, next) => {
-  if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
-    return next();
-  }
-
-  if (!req.sessionID || !req.cookies || !req.cookies['connect.sid']) {
-    console.log(`[${new Date().toISOString()}] No session ID or connect.sid cookie, redirecting to login`);
-    return res.redirect('/admin/login');
-  }
-
-  sessionStore.get(req.sessionID, (err, session) => {
-    console.log(`[${new Date().toISOString()}] Session store check:`, {
-      sessionID: req.sessionID,
-      sessionExists: !!session,
-      error: err,
-      cookies: req.cookies,
-    });
-    if (err || !session) {
-      console.log(`[${new Date().toISOString()}] Session not found in store, redirecting to login`);
-      req.session.destroy((destroyErr) => {
-        if (destroyErr) console.error(`[${new Date().toISOString()}] Session destroy error:`, destroyErr);
-        res.clearCookie('connect.sid', {
-          path: '/',
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        });
-        res.redirect('/admin/login');
-      });
-    } else {
-      console.log(`[${new Date().toISOString()}] Session found:`, session);
-      next();
-    }
   });
 });
 
@@ -995,7 +1011,7 @@ app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
   try {
     console.log(`[${new Date().toISOString()}] Deleting photo:`, { id: req.params.id, accept: req.headers.accept });
     const isAjax = req.headers.accept.includes('application/json') || req.query.ajax === 'true';
-    
+
     const photo = await Photo.findById(req.params.id);
     if (!photo) {
       console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
@@ -1432,10 +1448,10 @@ app.post('/contact', async (req, res) => {
 async function initializeAdmin() {
   const startTime = Date.now();
   try {
-    console.log('Checking admin user...');
-    console.log('ADMIN_USERNAME:', process.env.ADMIN_USERNAME || 'Not set');
-    console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
-    console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL || 'Not set');
+    console.log(`[${new Date().toISOString()}] Checking admin user...`);
+    console.log(`[${new Date().toISOString()}] ADMIN_USERNAME:`, process.env.ADMIN_USERNAME);
+    console.log(`[${new Date().toISOString()}] ADMIN_PASSWORD:`, process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
+    console.log(`[${new Date().toISOString()}] ADMIN_EMAIL:`, process.env.ADMIN_EMAIL);
 
     const adminCount = await Admin.countDocuments();
     if (adminCount === 0) {
@@ -1450,9 +1466,9 @@ async function initializeAdmin() {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      console.log('Admin user created:', process.env.ADMIN_USERNAME, { duration: `${Date.now() - startTime}ms` });
+      console.log(`[${new Date().toISOString()}] Admin user created:`, process.env.ADMIN_USERNAME, { duration: `${Date.now() - startTime}ms` });
     } else {
-      console.log('Admin user already exists, skipping creation', { duration: `${Date.now() - startTime}ms` });
+      console.log(`[${new Date().toISOString()}] Admin user already exists, skipping creation`, { duration: `${Date.now() - startTime}ms` });
     }
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Error initializing admin:`, {
@@ -1489,15 +1505,15 @@ app.use((err, req, res, next) => {
 
     const PORT = process.env.PORT || 10000;
     const server = app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`[${new Date().toISOString()}] Server running on port ${PORT}`);
     });
 
     process.on('SIGTERM', () => {
-      console.log('SIGTERM received. Shutting down gracefully');
+      console.log(`[${new Date().toISOString()}] SIGTERM received. Shutting down gracefully`);
       server.close(() => {
-        console.log('Server closed');
+        console.log(`[${new Date().toISOString()}] Server closed`);
         mongoose.connection.close(false, () => {
-          console.log('MongoDB connection closed');
+          console.log(`[${new Date().toISOString()}] MongoDB connection closed`);
           process.exit(0);
         });
       });
