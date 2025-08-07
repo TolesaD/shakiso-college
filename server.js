@@ -245,18 +245,11 @@ function ensureAuthenticated(req, res, next) {
     sessionExists: !!req.session,
     path: req.path,
   });
-  
-  // Skip authentication check for login routes
-  if (req.path === '/admin/login' || req.path === '/admin/logout') {
-    return next();
-  }
-
   if (req.session.user && req.session.user.role === 'admin') {
     req.session.touch();
     console.log(`[${new Date().toISOString()}] Session valid, proceeding`);
     return next();
   }
-  
   console.log(`[${new Date().toISOString()}] Session invalid, redirecting to login`);
   req.flash('error', 'Please log in to access this page');
   res.redirect('/admin/login');
