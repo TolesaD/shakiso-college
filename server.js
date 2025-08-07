@@ -70,12 +70,11 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Changed to 'lax' for better compatibility
       path: '/',
     },
     store: sessionStore,
@@ -253,29 +252,20 @@ function ensureAuthenticated(req, res, next) {
   res.redirect('/admin/login');
 }
 
-// Session Verification Middleware
+// Session Verification Middleware (simplified to avoid loop)
 app.use('/admin/*', (req, res, next) => {
+  // Skip session check for login and static assets
   if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
+    console.log(`[${new Date().toISOString()}] Skipping session check for: ${req.path}`);
     return next();
   }
-  console.log(`[${new Date().toISOString()}] Session verification:`, {
-    sessionID: req.sessionID,
-    cookie: req.cookies['connect.sid'] || 'none',
-    path: req.path,
-  });
-  if (!req.sessionID || !req.cookies['connect.sid']) {
-    console.log(`[${new Date().toISOString()}] No session ID or cookie, redirecting to login`);
-    return res.redirect('/admin/login');
+  // Check for valid session
+  if (req.session.user && req.session.user.role === 'admin') {
+    console.log(`[${new Date().toISOString()}] Valid admin session for: ${req.path}`);
+    return next();
   }
-  sessionStore.get(req.sessionID, (err, session) => {
-    if (err || !session) {
-      console.error(`[${new Date().toISOString()}] Session not found in store:`, err || 'No session data');
-      res.redirect('/admin/login');
-    } else {
-      console.log(`[${new Date().toISOString()}] Session found in store:`, session);
-      next();
-    }
-  });
+  console.log(`[${new Date().toISOString()}] No valid session, redirecting to login`);
+  res.redirect('/admin/login');
 });
 
 // Multer error handling middleware
@@ -493,23 +483,8 @@ app.post('/admin/login', async (req, res) => {
         return res.redirect('/admin/login');
       }
       console.log(`[${new Date().toISOString()}] Session saved successfully. Session ID:`, req.sessionID);
-      res.cookie('connect.sid', req.sessionID, {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-      sessionStore.get(req.sessionID, (err, session) => {
-        if (err || !session) {
-          console.error(`[${new Date().toISOString()}] Session not found in store:`, err);
-          req.flash('error', 'Session storage failed');
-          return res.redirect('/admin/login');
-        }
-        console.log(`[${new Date().toISOString()}] Session verified in store:`, session);
-        req.flash('success', 'Logged in successfully');
-        res.redirect('/admin/dashboard');
-      });
+      req.flash('success', 'Logged in successfully');
+      res.redirect('/admin/dashboard');
     });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Login error:`, {
@@ -535,7 +510,7 @@ app.get('/admin/logout', (req, res) => {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
     });
 
     if (user) {
