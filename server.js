@@ -70,12 +70,14 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    rolling: true, // Refresh cookie on each request
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Changed to 'lax' for better compatibility
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
       path: '/',
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Support Render subdomains
     },
     store: sessionStore,
   })
@@ -88,6 +90,9 @@ app.use((req, res, next) => {
     cookie: req.cookies['connect.sid'] || 'none',
     user: req.session.user || 'none',
     path: req.path,
+  });
+  res.on('finish', () => {
+    console.log(`[${new Date().toISOString()}] Response headers: ${JSON.stringify(res.getHeaders())}`);
   });
   next();
 });
@@ -228,9 +233,6 @@ app.use((req, res, next) => {
       req.cookies
     )} | Set-Cookie: ${res.get('Set-Cookie') || 'none'} | Accept: ${req.headers.accept || 'none'}`
   );
-  res.on('finish', () => {
-    console.log(`[${new Date().toISOString()}] Response headers: ${JSON.stringify(res.getHeaders())}`);
-  });
   next();
 });
 
@@ -243,30 +245,22 @@ function ensureAuthenticated(req, res, next) {
     sessionExists: !!req.session,
     path: req.path,
   });
+  
+  // Skip authentication check for login routes
+  if (req.path === '/admin/login' || req.path === '/admin/logout') {
+    return next();
+  }
+
   if (req.session.user && req.session.user.role === 'admin') {
     req.session.touch();
     console.log(`[${new Date().toISOString()}] Session valid, proceeding`);
     return next();
   }
+  
   console.log(`[${new Date().toISOString()}] Session invalid, redirecting to login`);
+  req.flash('error', 'Please log in to access this page');
   res.redirect('/admin/login');
 }
-
-// Session Verification Middleware (simplified to avoid loop)
-app.use('/admin/*', (req, res, next) => {
-  // Skip session check for login and static assets
-  if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
-    console.log(`[${new Date().toISOString()}] Skipping session check for: ${req.path}`);
-    return next();
-  }
-  // Check for valid session
-  if (req.session.user && req.session.user.role === 'admin') {
-    console.log(`[${new Date().toISOString()}] Valid admin session for: ${req.path}`);
-    return next();
-  }
-  console.log(`[${new Date().toISOString()}] No valid session, redirecting to login`);
-  res.redirect('/admin/login');
-});
 
 // Multer error handling middleware
 app.use((err, req, res, next) => {
@@ -431,10 +425,11 @@ app.get('/videos', async (req, res) => {
 
 // Admin Login Routes
 app.get('/admin/login', (req, res) => {
-  if (req.session.user) {
+  if (req.session.user && req.session.user.role === 'admin') {
     console.log(`[${new Date().toISOString()}] User already logged in, redirecting to dashboard`);
     return res.redirect('/admin/dashboard');
   }
+  console.log(`[${new Date().toISOString()}] Rendering login page`);
   res.render('admin/login', {
     error: req.flash('error'),
     success: req.query.logout === 'success' ? ['You have been logged out successfully'] : req.flash('success'),
@@ -511,6 +506,7 @@ app.get('/admin/logout', (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
     });
 
     if (user) {
@@ -521,7 +517,7 @@ app.get('/admin/logout', (req, res) => {
   });
 });
 
-// Admin Dashboard
+// Admin Routes (protected with ensureAuthenticated)
 app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
   const startTime = Date.now();
   try {
@@ -553,7 +549,6 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Announcements Routes
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
   const startTime = Date.now();
   try {
