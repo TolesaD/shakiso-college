@@ -93,7 +93,7 @@ app.use(flash());
 
 // Configure Backblaze B2
 const s3 = new S3Client({
-  region: 'us-west-000',
+  region: 'ca-east-006',
   endpoint: process.env.B2_ENDPOINT,
   credentials: {
     accessKeyId: process.env.B2_KEY_ID,
@@ -107,7 +107,7 @@ const imageFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Only images (JPEG, JPG, PNG, GIF) are allowed'), false);
+    cb(new Error('Invalid file format. Only JPEG, JPG, PNG, GIF allowed.'), false);
   }
 };
 
@@ -123,7 +123,7 @@ const videoFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Only videos (MP4, WebM, OGG) are allowed'), false);
+    cb(new Error('Invalid file format. Only MP4, WebM, OGG allowed.'), false);
   }
 };
 
@@ -135,18 +135,34 @@ const uploadVideo = multer({
 
 // Upload to Backblaze B2 and generate signed URL
 async function uploadToB2(file, folder) {
+  const startTime = Date.now();
   const key = `${folder}/${Date.now()}${path.extname(file.originalname)}`;
-  await s3.send(new PutObjectCommand({
-    Bucket: process.env.B2_BUCKET_NAME,
-    Key: key,
-    Body: file.buffer,
-    ContentType: file.mimetype,
-  }));
-  const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
-    Bucket: process.env.B2_BUCKET_NAME,
-    Key: key,
-  }), { expiresIn: 604800 }); // 7 days
-  return { signedUrl, key };
+  try {
+    console.log(`[${new Date().toISOString()}] Starting B2 upload:`, { key, mimetype: file.mimetype, size: file.size });
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
+    const uploadDuration = Date.now() - startTime;
+    console.log(`[${new Date().toISOString()}] B2 upload completed:`, { key, duration: `${uploadDuration}ms` });
+    const signedUrl = await getSignedUrl(s3, new GetObjectCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+    }), { expiresIn: 604800 }); // 7 days
+    console.log(`[${new Date().toISOString()}] Generated signed URL:`, { signedUrl, duration: `${Date.now() - startTime - uploadDuration}ms` });
+    return { signedUrl, key, totalDuration: Date.now() - startTime };
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] B2 upload error:`, {
+      message: err.message,
+      code: err.code,
+      name: err.name,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    throw err;
+  }
 }
 
 // Database connection
@@ -160,9 +176,20 @@ const connectDB = async () => {
         serverSelectionTimeoutMS: 5000,
       });
       console.log('Connected to MongoDB');
+      // Ensure indexes for Video and Photo collections
+      await mongoose.model('Video').createIndexes();
+      await mongoose.model('Photo').createIndexes();
+      // Clear sessions collection on startup
+      await mongoose.connection.collection('sessions').deleteMany({});
+      console.log(`[${new Date().toISOString()}] Cleared sessions collection on startup`);
       return;
     } catch (err) {
-      console.error(`[${new Date().toISOString()}] MongoDB connection error:`, err);
+      console.error(`[${new Date().toISOString()}] MongoDB connection error:`, {
+        message: err.message,
+        code: err.code,
+        name: err.name,
+        stack: err.stack,
+      });
       retries -= 1;
       if (retries === 0) {
         console.error('MongoDB connection failed after retries, exiting...');
@@ -232,18 +259,27 @@ function ensureAuthenticated(req, res, next) {
   });
 }
 
-// Error handling middleware for Multer
+// Multer error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    console.error(`[${new Date().toISOString()}] Multer error:`, err);
+    console.error(`[${new Date().toISOString()}] Multer error:`, {
+      message: err.message,
+      code: err.code,
+      field: err.field,
+    });
+    req.flash('error', `Upload failed: ${err.message}`);
+    return res.redirect(req.originalUrl.includes('photos') ? '/admin/photos/new' : '/admin/videos/new');
+  } else if (err.message.includes('Invalid file format')) {
+    console.error(`[${new Date().toISOString()}] File format error:`, err.message);
     req.flash('error', err.message);
-    return res.status(400).json({ success: false, message: err.message });
+    return res.redirect(req.originalUrl.includes('photos') ? '/admin/photos/new' : '/admin/videos/new');
   }
   next(err);
 });
 
 // Frontend Routes
 app.get('/', async (req, res) => {
+  const startTime = Date.now();
   try {
     const announcements = await Announcement.find({ isActive: true })
       .sort({ createdAt: -1 })
@@ -254,6 +290,7 @@ app.get('/', async (req, res) => {
       announcementCount: announcements.length,
       photoCount: photos.length,
       videoCount: videos.length,
+      duration: `${Date.now() - startTime}ms`,
     });
     res.render('index', {
       announcements,
@@ -263,10 +300,15 @@ app.get('/', async (req, res) => {
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Homepage error:`, err);
+    console.error(`[${new Date().toISOString()}] Homepage error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     res.status(500).render('error', {
       message: 'Failed to load homepage',
       error: process.env.NODE_ENV === 'development' ? err : {},
+      messages: req.flash(),
     });
   }
 });
@@ -286,55 +328,125 @@ app.get('/contact', (req, res) => {
 });
 
 app.get('/announcements', async (req, res) => {
+  const startTime = Date.now();
   try {
     const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
-    console.log(`[${new Date().toISOString()}] Fetched public announcements:`, { count: announcements.length });
+    console.log(`[${new Date().toISOString()}] Fetched public announcements:`, {
+      count: announcements.length,
+      sample: announcements.length > 0 ? {
+        id: announcements[0]._id,
+        title: announcements[0].title,
+        content: announcements[0].content ? announcements[0].content.substring(0, 50) + '...' : null,
+        isActive: announcements[0].isActive,
+        createdAt: announcements[0].createdAt
+      } : null,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    // Validate announcement data
+    const invalidAnnouncements = announcements.filter(a => !a.title || !a.content || !a.createdAt);
+    if (invalidAnnouncements.length > 0) {
+      console.warn(`[${new Date().toISOString()}] Invalid announcements detected:`, {
+        count: invalidAnnouncements.length,
+        ids: invalidAnnouncements.map(a => a._id),
+      });
+    }
     res.render('announcements', {
-      announcements,
+      announcements: announcements || [],
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Public announcements error:`, err);
-    res.status(500).render('error', {
-      message: 'Failed to load announcements',
-      error: process.env.NODE_ENV === 'development' ? err : {},
+    console.error(`[${new Date().toISOString()}] Public announcements error:`, {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
+      view: err.view || 'N/A',
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load announcements: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.status(500).render('error', {
+        message: 'Failed to load announcements',
+        error: process.env.NODE_ENV === 'development' ? err : {},
+        messages: req.flash(),
+      });
     });
   }
 });
 
 app.get('/gallery', async (req, res) => {
+  const startTime = Date.now();
   try {
     const photos = await Photo.find().sort({ createdAt: -1 });
-    console.log(`[${new Date().toISOString()}] Fetched gallery photos:`, { photoCount: photos.length });
+    console.log(`[${new Date().toISOString()}] Fetched gallery photos:`, {
+      photoCount: photos.length,
+      sample: photos.length > 0 ? {
+        title: photos[0].title,
+        imageUrl: photos[0].imageUrl ? photos[0].imageUrl.substring(0, 50) + '...' : null,
+        createdAt: photos[0].createdAt
+      } : null,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    // Validate photo URLs
+    const invalidPhotos = photos.filter(photo => !photo.imageUrl || typeof photo.imageUrl !== 'string');
+    if (invalidPhotos.length > 0) {
+      console.warn(`[${new Date().toISOString()}] Invalid photo URLs detected:`, {
+        count: invalidPhotos.length,
+        ids: invalidPhotos.map(p => p._id),
+      });
+    }
     res.render('gallery', {
-      photos,
+      photos: photos || [],
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Gallery error:`, err);
-    res.status(500).render('error', {
-      message: 'Failed to load gallery',
-      error: process.env.NODE_ENV === 'development' ? err : {},
+    console.error(`[${new Date().toISOString()}] Gallery error:`, {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load gallery: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.status(500).render('error', {
+        message: 'Failed to load gallery',
+        error: process.env.NODE_ENV === 'development' ? err : {},
+        messages: req.flash(),
+      });
     });
   }
 });
 
 app.get('/videos', async (req, res) => {
+  const startTime = Date.now();
   try {
     const videos = await Video.find().sort({ createdAt: -1 });
-    console.log(`[${new Date().toISOString()}] Fetched videos:`, { videoCount: videos.length });
+    console.log(`[${new Date().toISOString()}] Fetched videos:`, {
+      videoCount: videos.length,
+      duration: `${Date.now() - startTime}ms`,
+    });
     res.render('videos', {
-      videos,
+      videos: videos || [],
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Videos error:`, err);
-    res.status(500).render('error', {
-      message: 'Failed to load videos',
-      error: process.env.NODE_ENV === 'development' ? err : {},
+    console.error(`[${new Date().toISOString()}] Videos error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load videos: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.status(500).render('error', {
+        message: 'Failed to load videos',
+        error: process.env.NODE_ENV === 'development' ? err : {},
+        messages: req.flash(),
+      });
     });
   }
 });
@@ -354,25 +466,34 @@ app.get('/admin/login', (req, res) => {
 });
 
 app.post('/admin/login', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { username, password } = req.body;
-    console.log(`[${new Date().toISOString()}] Login attempt: { username: '${username}' }`);
+    console.log(`[${new Date().toISOString()}] Login attempt:`, { username });
 
     const admin = await Admin.findOne({ username });
     if (!admin) {
-      console.log(`[${new Date().toISOString()}] User not found: ${username}`);
+      console.log(`[${new Date().toISOString()}] User not found:`, username);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
-      return res.redirect('/admin/login');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/login');
+      });
+      return;
     }
 
     const isMatch = await admin.comparePassword(password);
-    console.log(`[${new Date().toISOString()}] Password match: ${isMatch}`);
+    console.log(`[${new Date().toISOString()}] Password match:`, isMatch);
     if (!isMatch) {
-      console.log(`[${new Date().toISOString()}] Password mismatch for user: ${username}`);
+      console.log(`[${new Date().toISOString()}] Password mismatch for user:`, username);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
-      return res.redirect('/admin/login');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/login');
+      });
+      return;
     }
 
     req.session.user = {
@@ -380,7 +501,10 @@ app.post('/admin/login', async (req, res) => {
       username: admin.username,
       role: 'admin',
     };
-    console.log(`[${new Date().toISOString()}] Session created:`, req.session.user, { sessionID: req.sessionID });
+    console.log(`[${new Date().toISOString()}] Session created:`, req.session.user, {
+      sessionID: req.sessionID,
+      duration: `${Date.now() - startTime}ms`,
+    });
 
     req.session.save((err) => {
       if (err) {
@@ -388,7 +512,7 @@ app.post('/admin/login', async (req, res) => {
         req.flash('error', 'Failed to save session');
         return res.redirect('/admin/login');
       }
-      console.log(`[${new Date().toISOString()}] Session saved successfully. Session ID: ${req.sessionID}`);
+      console.log(`[${new Date().toISOString()}] Session saved successfully. Session ID:`, req.sessionID);
       sessionStore.get(req.sessionID, (err, session) => {
         if (err || !session) {
           console.error(`[${new Date().toISOString()}] Session not found in store:`, err);
@@ -401,9 +525,16 @@ app.post('/admin/login', async (req, res) => {
       });
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Login error:`, err);
+    console.error(`[${new Date().toISOString()}] Login error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     req.flash('error', 'An error occurred during login');
-    res.redirect('/admin/login');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/login');
+    });
   }
 });
 
@@ -477,6 +608,7 @@ app.use('/admin*', (req, res, next) => {
 
 // Admin Dashboard
 app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const [announcementCount, photoCount, videoCount] = await Promise.all([
       Announcement.countDocuments(),
@@ -493,29 +625,40 @@ app.get('/admin/dashboard', ensureAuthenticated, async (req, res) => {
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Dashboard error:`, err);
+    console.error(`[${new Date().toISOString()}] Dashboard error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     res.status(500).render('error', {
       message: 'Failed to load dashboard',
       error: process.env.NODE_ENV === 'development' ? err : {},
+      messages: req.flash(),
     });
   }
 });
 
 // Announcements Routes
 app.get('/admin/announcements', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const announcements = await Announcement.find().sort({ createdAt: -1 });
     res.render('admin/manage-announcements', {
-      announcements,
+      announcements: announcements || [],
       user: req.session.user,
       currentRoute: 'announcements',
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Announcements error:`, err);
+    console.error(`[${new Date().toISOString()}] Announcements error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     res.status(500).render('error', {
       message: 'Failed to load announcements',
       error: process.env.NODE_ENV === 'development' ? err : {},
+      messages: req.flash(),
     });
   }
 });
@@ -529,6 +672,7 @@ app.get('/admin/announcements/new', ensureAuthenticated, (req, res) => {
 });
 
 app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
@@ -541,13 +685,21 @@ app.get('/admin/announcements/:id/edit', ensureAuthenticated, async (req, res) =
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Announcement edit error:`, err);
+    console.error(`[${new Date().toISOString()}] Announcement edit error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     req.flash('error', 'Failed to load announcement');
-    res.redirect('/admin/announcements');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements');
+    });
   }
 });
 
 app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const { title, content, isActive } = req.body;
     console.log(`[${new Date().toISOString()}] Creating announcement:`, { title, isActive });
@@ -561,24 +713,35 @@ app.post('/admin/announcements', ensureAuthenticated, async (req, res) => {
 
     const newAnnouncement = new Announcement(announcementData);
     await newAnnouncement.save();
-    console.log(`[${new Date().toISOString()}] Saved announcement:`, newAnnouncement.toObject());
+    console.log(`[${new Date().toISOString()}] Saved announcement:`, newAnnouncement.toObject(), { duration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Announcement created successfully');
-    res.redirect('/admin/announcements');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Create announcement error:`, err);
+    console.error(`[${new Date().toISOString()}] Create announcement error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
         ? Object.values(err.errors)
             .map((e) => e.message)
             .join(', ')
-        : 'Failed to create announcement'
+        : `Failed to create announcement: ${err.message}`
     );
-    res.redirect('/admin/announcements/new');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements/new');
+    });
   }
 });
 
 app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const { title, content, isActive } = req.body;
     console.log(`[${new Date().toISOString()}] Updating announcement:`, { id: req.params.id, title, isActive });
@@ -591,56 +754,92 @@ app.put('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
     };
 
     const updatedAnnouncement = await Announcement.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-    console.log(`[${new Date().toISOString()}] Updated announcement:`, updatedAnnouncement.toObject());
+    console.log(`[${new Date().toISOString()}] Updated announcement:`, updatedAnnouncement.toObject(), { duration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Announcement updated successfully');
-    res.redirect('/admin/announcements');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Update announcement error:`, err);
+    console.error(`[${new Date().toISOString()}] Update announcement error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     req.flash(
       'error',
       err instanceof mongoose.Error.ValidationError
         ? Object.values(err.errors)
             .map((e) => e.message)
             .join(', ')
-        : 'Failed to update announcement'
+        : `Failed to update announcement: ${err.message}`
     );
-    res.redirect(`/admin/announcements/${req.params.id}/edit`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect(`/admin/announcements/${req.params.id}/edit`);
+    });
   }
 });
 
 app.delete('/admin/announcements/:id', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
       console.log(`[${new Date().toISOString()}] Announcement not found:`, req.params.id);
-      return res.status(404).json({ success: false, message: 'Announcement not found' });
+      req.flash('error', 'Announcement not found');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/announcements');
+      });
+      return;
     }
 
     await Announcement.findByIdAndDelete(req.params.id);
-    console.log(`[${new Date().toISOString()}] Deleted announcement:`, req.params.id);
-    return res.json({ success: true, message: 'Announcement deleted successfully' });
+    console.log(`[${new Date().toISOString()}] Deleted announcement:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+    req.flash('success', 'Announcement deleted successfully');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Delete announcement error:`, err);
-    return res.status(500).json({ success: false, message: 'Failed to delete announcement' });
+    console.error(`[${new Date().toISOString()}] Delete announcement error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to delete announcement: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/announcements');
+    });
   }
 });
 
 // Photos Routes
 app.get('/admin/photos', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const photos = await Photo.find().sort({ createdAt: -1 });
-    console.log(`[${new Date().toISOString()}] Fetched admin photos:`, { photoCount: photos.length });
+    console.log(`[${new Date().toISOString()}] Fetched admin photos:`, { photoCount: photos.length, duration: `${Date.now() - startTime}ms` });
     res.render('admin/manage-photos', {
-      photos,
+      photos: photos || [],
       user: req.session.user,
       currentRoute: 'photos',
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Photos error:`, err);
-    res.status(500).render('error', {
-      message: 'Failed to load photos',
-      error: process.env.NODE_ENV === 'development' ? err : {},
+    console.error(`[${new Date().toISOString()}] Photos error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load photos: ${err.message}`);
+    res.render('admin/manage-photos', {
+      photos: [],
+      user: req.session.user,
+      currentRoute: 'photos',
+      messages: req.flash(),
     });
   }
 });
@@ -654,6 +853,7 @@ app.get('/admin/photos/new', ensureAuthenticated, (req, res) => {
 });
 
 app.get('/admin/photos/:id/edit', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const photo = await Photo.findById(req.params.id);
     if (!photo) {
@@ -666,21 +866,41 @@ app.get('/admin/photos/:id/edit', ensureAuthenticated, async (req, res) => {
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Photo edit error:`, err);
-    req.flash('error', 'Failed to load photo for editing');
-    res.redirect('/admin/photos');
+    console.error(`[${new Date().toISOString()}] Photo edit error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load photo for editing: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/photos');
+    });
   }
 });
 
 app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
+  const startTime = Date.now();
   try {
+    console.log(`[${new Date().toISOString()}] Photo upload attempt:`, {
+      file: req.file ? { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size } : 'No file',
+      body: req.body,
+      user: req.session.user,
+    });
     if (!req.file) {
       req.flash('error', 'Please select an image file');
-      return res.redirect('/admin/photos/new');
+      console.log(`[${new Date().toISOString()}] No file uploaded`);
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/photos/new');
+      });
+      return;
     }
 
     const { title, description, isFeatured } = req.body;
-    const { signedUrl, key } = await uploadToB2(req.file, 'images');
+    console.log(`[${new Date().toISOString()}] Uploading to B2:`, { title, description, isFeatured });
+    const { signedUrl, key, totalDuration } = await uploadToB2(req.file, 'images');
+    console.log(`[${new Date().toISOString()}] B2 upload successful:`, { signedUrl, key, totalDuration: `${totalDuration}ms` });
     const newPhoto = new Photo({
       title,
       description,
@@ -691,26 +911,36 @@ app.post('/admin/photos', ensureAuthenticated, uploadImage.single('image'), asyn
     });
 
     await newPhoto.save();
-    console.log(`[${new Date().toISOString()}] Saved photo:`, newPhoto.toObject());
+    console.log(`[${new Date().toISOString()}] Saved photo:`, newPhoto.toObject(), { duration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Photo uploaded successfully');
-    res.redirect('/admin/photos');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/photos');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Photo upload error:`, err);
-    req.flash(
-      'error',
-      err instanceof mongoose.Error.ValidationError
-        ? Object.values(err.errors)
-            .map((e) => e.message)
-            .join(', ')
-        : 'Failed to upload photo'
-    );
-    res.redirect('/admin/photos/new');
+    console.error(`[${new Date().toISOString()}] Photo upload error:`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      name: err.name,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to upload photo: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/photos/new');
+    });
   }
 });
 
 app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), async (req, res) => {
+  const startTime = Date.now();
   try {
-    console.log(`[${new Date().toISOString()}] Updating photo:`, { id: req.params.id, session: req.sessionID });
+    console.log(`[${new Date().toISOString()}] Updating photo:`, {
+      id: req.params.id,
+      session: req.sessionID,
+      file: req.file ? { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size } : 'No file',
+    });
     const { title, description, isFeatured } = req.body;
     const updateData = {
       title,
@@ -720,79 +950,120 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     };
 
     if (req.file) {
-      const { signedUrl, key } = await uploadToB2(req.file, 'images');
+      console.log(`[${new Date().toISOString()}] Uploading new image to B2`);
+      const { signedUrl, key, totalDuration } = await uploadToB2(req.file, 'images');
       updateData.imageUrl = signedUrl;
       updateData.b2Key = key;
+      console.log(`[${new Date().toISOString()}] B2 upload successful:`, { signedUrl, key, totalDuration: `${totalDuration}ms` });
     }
 
     const updatedPhoto = await Photo.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!updatedPhoto) {
       req.flash('error', 'Photo not found');
       console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
-      return res.redirect('/admin/photos');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/photos');
+      });
+      return;
     }
-    console.log(`[${new Date().toISOString()}] Updated photo:`, updatedPhoto.toObject());
+    console.log(`[${new Date().toISOString()}] Updated photo:`, updatedPhoto.toObject(), { duration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Photo updated successfully');
-
     req.session.save((err) => {
-      if (err) {
-        console.error(`[${new Date().toISOString()}] Session save error:`, err);
-        req.flash('error', 'Failed to save session');
-        return res.redirect(`/admin/photos/${req.params.id}/edit`);
-      }
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.redirect('/admin/photos');
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Photo update error:`, err);
-    req.flash(
-      'error',
-      err instanceof mongoose.Error.ValidationError
-        ? Object.values(err.errors)
-            .map((e) => e.message)
-            .join(', ')
-        : 'Failed to update photo'
-    );
-    req.session.save(() => {
+    console.error(`[${new Date().toISOString()}] Photo update error:`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      name: err.name,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to update photo: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
       res.redirect(`/admin/photos/${req.params.id}/edit`);
     });
   }
 });
 
 app.delete('/admin/photos/:id', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     console.log(`[${new Date().toISOString()}] Deleting photo:`, { id: req.params.id, accept: req.headers.accept });
+    const isAjax = req.headers.accept.includes('application/json') || req.query.ajax === 'true';
+    
     const photo = await Photo.findById(req.params.id);
     if (!photo) {
       console.log(`[${new Date().toISOString()}] Photo not found:`, req.params.id);
-      return res.status(404).json({ success: false, message: 'Photo not found' });
+      req.flash('error', 'Photo not found');
+      if (isAjax) {
+        return res.status(404).json({ success: false, message: 'Photo not found' });
+      }
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/photos');
+      });
+      return;
     }
 
     await Photo.findByIdAndDelete(req.params.id);
-    console.log(`[${new Date().toISOString()}] Deleted photo:`, req.params.id);
-    return res.json({ success: true, message: 'Photo deleted successfully' });
+    console.log(`[${new Date().toISOString()}] Deleted photo:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+    req.flash('success', 'Photo deleted successfully');
+    if (isAjax) {
+      return res.status(200).json({ success: true, message: 'Photo deleted successfully' });
+    }
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/photos');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Delete photo error:`, err);
-    return res.status(500).json({ success: false, message: 'Failed to delete photo', error: err.message });
+    console.error(`[${new Date().toISOString()}] Delete photo error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to delete photo: ${err.message}`);
+    if (isAjax) {
+      return res.status(500).json({ success: false, message: `Failed to delete photo: ${err.message}` });
+    }
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/photos');
+    });
   }
 });
 
 // Videos Routes
 app.get('/admin/videos', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const videos = await Video.find().sort({ createdAt: -1 });
-    console.log(`[${new Date().toISOString()}] Fetched admin videos:`, { videoCount: videos.length });
+    console.log(`[${new Date().toISOString()}] Fetched admin videos:`, { videoCount: videos.length, duration: `${Date.now() - startTime}ms` });
     res.render('admin/manage-videos', {
-      videos,
+      videos: videos || [],
       user: req.session.user,
       currentRoute: 'videos',
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Videos error:`, err);
-    res.status(500).render('error', {
-      message: 'Failed to load videos',
-      error: process.env.NODE_ENV === 'development' ? err : {},
+    console.error(`[${new Date().toISOString()}] Videos error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load videos: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.render('admin/manage-videos', {
+        videos: [],
+        user: req.session.user,
+        currentRoute: 'videos',
+        messages: req.flash(),
+      });
     });
   }
 });
@@ -806,37 +1077,67 @@ app.get('/admin/videos/new', ensureAuthenticated, (req, res) => {
 });
 
 app.get('/admin/videos/:id/edit', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const video = await Video.findById(req.params.id);
     if (!video) {
       req.flash('error', 'Video not found');
-      return res.redirect('/admin/videos');
+      console.log(`[${new Date().toISOString()}] Video not found:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/videos');
+      });
+      return;
     }
+    console.log(`[${new Date().toISOString()}] Fetched video for edit:`, { id: req.params.id, duration: `${Date.now() - startTime}ms` });
     res.render('admin/edit-video', {
       video,
       user: req.session.user,
       messages: req.flash(),
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Video edit error:`, err);
-    req.flash('error', 'Failed to load video for editing');
-    res.redirect('/admin/videos');
+    console.error(`[${new Date().toISOString()}] Video edit error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to load video for editing: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/videos');
+    });
   }
 });
 
 app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
+  const startTime = Date.now();
   try {
     const { title, description, isFeatured, source, youtubeUrl } = req.body;
-    console.log(`[${new Date().toISOString()}] Creating video:`, { title, source });
+    console.log(`[${new Date().toISOString()}] Video upload attempt:`, {
+      file: req.file ? { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size } : 'No file',
+      body: req.body,
+      user: req.session.user,
+      duration: `${Date.now() - startTime}ms`,
+    });
 
     if (source === 'upload' && !req.file) {
       req.flash('error', 'Please upload a video file');
-      return res.redirect('/admin/videos/new');
+      console.log(`[${new Date().toISOString()}] No video file uploaded`, { duration: `${Date.now() - startTime}ms` });
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/videos/new');
+      });
+      return;
     }
 
     if (source === 'youtube' && !youtubeUrl) {
       req.flash('error', 'Please provide a YouTube URL');
-      return res.redirect('/admin/videos/new');
+      console.log(`[${new Date().toISOString()}] No YouTube URL provided`, { duration: `${Date.now() - startTime}ms` });
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/videos/new');
+      });
+      return;
     }
 
     const videoData = {
@@ -852,43 +1153,70 @@ app.post('/admin/videos', ensureAuthenticated, uploadVideo.single('video'), asyn
       const match = youtubeUrl.match(regExp);
       if (!match) {
         req.flash('error', 'Invalid YouTube URL');
-        return res.redirect('/admin/videos/new');
+        console.log(`[${new Date().toISOString()}] Invalid YouTube URL:`, youtubeUrl, { duration: `${Date.now() - startTime}ms` });
+        req.session.save((err) => {
+          if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+          res.redirect('/admin/videos/new');
+        });
+        return;
       }
       videoData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
     } else {
-      const { signedUrl, key } = await uploadToB2(req.file, 'videos');
+      console.log(`[${new Date().toISOString()}] Uploading video to B2`, { duration: `${Date.now() - startTime}ms` });
+      const { signedUrl, key, totalDuration } = await uploadToB2(req.file, 'videos');
+      console.log(`[${new Date().toISOString()}] B2 upload successful:`, { signedUrl, key, totalDuration: `${totalDuration}ms` });
       videoData.videoUrl = signedUrl;
       videoData.b2Key = key;
     }
 
     const newVideo = new Video(videoData);
     await newVideo.save();
-    console.log(`[${new Date().toISOString()}] Saved video:`, newVideo.toObject());
+    console.log(`[${new Date().toISOString()}] Saved video:`, newVideo.toObject(), { totalDuration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Video added successfully');
-    res.redirect('/admin/videos');
+    req.session.save((err) => {
+      if (err) {
+        console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        req.flash('error', 'Failed to save session');
+      }
+      res.redirect('/admin/videos');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Video upload error:`, err);
-    req.flash(
-      'error',
-      err instanceof mongoose.Error.ValidationError
-        ? Object.values(err.errors)
-            .map((e) => e.message)
-            .join(', ')
-        : 'Failed to add video'
-    );
-    res.redirect('/admin/videos/new');
+    console.error(`[${new Date().toISOString()}] Video upload error:`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      name: err.name,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to add video: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/videos/new');
+    });
   }
 });
 
 app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), async (req, res) => {
+  const startTime = Date.now();
   try {
     const { title, description, isFeatured, source, youtubeUrl } = req.body;
-    console.log(`[${new Date().toISOString()}] Updating video:`, { id: req.params.id, title, source });
+    console.log(`[${new Date().toISOString()}] Updating video:`, {
+      id: req.params.id,
+      title,
+      source,
+      file: req.file ? { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size } : 'No file',
+      duration: `${Date.now() - startTime}ms`,
+    });
 
     const video = await Video.findById(req.params.id);
     if (!video) {
       req.flash('error', 'Video not found');
-      return res.redirect('/admin/videos');
+      console.log(`[${new Date().toISOString()}] Video not found:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/videos');
+      });
+      return;
     }
 
     const updateData = {
@@ -904,56 +1232,94 @@ app.put('/admin/videos/:id', ensureAuthenticated, uploadVideo.single('video'), a
       const match = youtubeUrl.match(regExp);
       if (!match) {
         req.flash('error', 'Invalid YouTube URL');
-        return res.redirect(`/admin/videos/${req.params.id}/edit`);
+        console.log(`[${new Date().toISOString()}] Invalid YouTube URL:`, youtubeUrl, { duration: `${Date.now() - startTime}ms` });
+        req.session.save((err) => {
+          if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+          res.redirect(`/admin/videos/${req.params.id}/edit`);
+        });
+        return;
       }
       updateData.videoUrl = `https://www.youtube.com/embed/${match[1]}`;
       updateData.b2Key = null;
     } else if (req.file) {
-      const { signedUrl, key } = await uploadToB2(req.file, 'videos');
+      console.log(`[${new Date().toISOString()}] Uploading new video to B2`, { duration: `${Date.now() - startTime}ms` });
+      const { signedUrl, key, totalDuration } = await uploadToB2(req.file, 'videos');
       updateData.videoUrl = signedUrl;
       updateData.b2Key = key;
+      console.log(`[${new Date().toISOString()}] B2 upload successful:`, { signedUrl, key, totalDuration: `${totalDuration}ms` });
     } else {
       updateData.videoUrl = video.videoUrl;
       updateData.b2Key = video.b2Key;
     }
 
     const updatedVideo = await Video.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-    console.log(`[${new Date().toISOString()}] Updated video:`, updatedVideo.toObject());
+    console.log(`[${new Date().toISOString()}] Updated video:`, updatedVideo.toObject(), { totalDuration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Video updated successfully');
-    res.redirect('/admin/videos');
+    req.session.save((err) => {
+      if (err) {
+        console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        req.flash('error', 'Failed to save session');
+      }
+      res.redirect('/admin/videos');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Video update error:`, err);
-    req.flash(
-      'error',
-      err instanceof mongoose.Error.ValidationError
-        ? Object.values(err.errors)
-            .map((e) => e.message)
-            .join(', ')
-        : 'Failed to update video'
-    );
-    res.redirect(`/admin/videos/${req.params.id}/edit`);
+    console.error(`[${new Date().toISOString()}] Video update error:`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      name: err.name,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to update video: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect(`/admin/videos/${req.params.id}/edit`);
+    });
   }
 });
 
 app.delete('/admin/videos/:id', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
+    console.log(`[${new Date().toISOString()}] Deleting video:`, { id: req.params.id, accept: req.headers.accept });
     const video = await Video.findById(req.params.id);
     if (!video) {
-      console.log(`[${new Date().toISOString()}] Video not found:`, req.params.id);
-      return res.status(404).json({ success: false, message: 'Video not found' });
+      console.log(`[${new Date().toISOString()}] Video not found:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+      req.flash('error', 'Video not found');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/admin/videos');
+      });
+      return;
     }
 
     await Video.findByIdAndDelete(req.params.id);
-    console.log(`[${new Date().toISOString()}] Deleted video:`, req.params.id);
-    return res.json({ success: true, message: 'Video deleted successfully' });
+    console.log(`[${new Date().toISOString()}] Deleted video:`, req.params.id, { duration: `${Date.now() - startTime}ms` });
+    req.flash('success', 'Video deleted successfully');
+    req.session.save((err) => {
+      if (err) {
+        console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        req.flash('error', 'Failed to save session');
+      }
+      res.redirect('/admin/videos');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Delete video error:`, err);
-    return res.status(500).json({ success: false, message: 'Failed to delete video' });
+    console.error(`[${new Date().toISOString()}] Delete video error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to delete video: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/videos');
+    });
   }
 });
 
 // Refresh signed URLs
 app.get('/admin/refresh-urls', ensureAuthenticated, async (req, res) => {
+  const startTime = Date.now();
   try {
     const photos = await Photo.find({ b2Key: { $exists: true } });
     for (const photo of photos) {
@@ -961,8 +1327,7 @@ app.get('/admin/refresh-urls', ensureAuthenticated, async (req, res) => {
         Bucket: process.env.B2_BUCKET_NAME,
         Key: photo.b2Key,
       }), { expiresIn: 604800 });
-      photo.imageUrl = signedUrl;
-      await photo.save();
+      await Photo.findByIdAndUpdate(photo._id, { imageUrl: signedUrl });
     }
     const videos = await Video.find({ b2Key: { $exists: true } });
     for (const video of videos) {
@@ -970,21 +1335,31 @@ app.get('/admin/refresh-urls', ensureAuthenticated, async (req, res) => {
         Bucket: process.env.B2_BUCKET_NAME,
         Key: video.b2Key,
       }), { expiresIn: 604800 });
-      video.videoUrl = signedUrl;
-      await video.save();
+      await Video.findByIdAndUpdate(video._id, { videoUrl: signedUrl });
     }
-    console.log(`[${new Date().toISOString()}] Refreshed signed URLs`);
+    console.log(`[${new Date().toISOString()}] Refreshed signed URLs`, { duration: `${Date.now() - startTime}ms` });
     req.flash('success', 'Signed URLs refreshed successfully');
-    res.redirect('/admin');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/dashboard');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Error refreshing URLs:`, err);
-    req.flash('error', 'Error refreshing URLs');
-    res.redirect('/admin');
+    console.error(`[${new Date().toISOString()}] Error refreshing URLs:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Error refreshing URLs: ${err.message}`);
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/admin/dashboard');
+    });
   }
 });
 
 // Cron job to refresh signed URLs daily
 cron.schedule('0 0 * * *', async () => {
+  const startTime = Date.now();
   try {
     const photos = await Photo.find({ b2Key: { $exists: true } });
     for (const photo of photos) {
@@ -992,8 +1367,7 @@ cron.schedule('0 0 * * *', async () => {
         Bucket: process.env.B2_BUCKET_NAME,
         Key: photo.b2Key,
       }), { expiresIn: 604800 });
-      photo.imageUrl = signedUrl;
-      await photo.save();
+      await Photo.findByIdAndUpdate(photo._id, { imageUrl: signedUrl });
     }
     const videos = await Video.find({ b2Key: { $exists: true } });
     for (const video of videos) {
@@ -1001,22 +1375,30 @@ cron.schedule('0 0 * * *', async () => {
         Bucket: process.env.B2_BUCKET_NAME,
         Key: video.b2Key,
       }), { expiresIn: 604800 });
-      video.videoUrl = signedUrl;
-      await video.save();
+      await Video.findByIdAndUpdate(video._id, { videoUrl: signedUrl });
     }
-    console.log(`[${new Date().toISOString()}] Refreshed signed URLs via cron`);
+    console.log(`[${new Date().toISOString()}] Refreshed signed URLs via cron`, { duration: `${Date.now() - startTime}ms` });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Cron URL refresh error:`, err);
+    console.error(`[${new Date().toISOString()}] Cron URL refresh error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
   }
 });
 
 app.post('/contact', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { name, email, subject, message } = req.body;
 
     if (!name || !email || !subject || !message) {
       req.flash('error', 'All fields are required');
-      return res.redirect('/contact');
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/contact');
+      });
+      return;
     }
 
     console.log(`[${new Date().toISOString()}] New contact form submission:`, {
@@ -1024,19 +1406,31 @@ app.post('/contact', async (req, res) => {
       email,
       subject,
       message,
+      duration: `${Date.now() - startTime}ms`,
     });
 
     req.flash('success', 'Thank you for your message! We will contact you soon.');
-    res.redirect('/contact');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/contact');
+    });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Contact form error:`, err);
+    console.error(`[${new Date().toISOString()}] Contact form error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     req.flash('error', 'Failed to send your message. Please try again later.');
-    res.redirect('/contact');
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/contact');
+    });
   }
 });
 
 // Initialize admin user
 async function initializeAdmin() {
+  const startTime = Date.now();
   try {
     console.log('Checking admin user...');
     console.log('ADMIN_USERNAME:', process.env.ADMIN_USERNAME || 'Not set');
@@ -1056,23 +1450,34 @@ async function initializeAdmin() {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      console.log('Admin user created:', process.env.ADMIN_USERNAME);
+      console.log('Admin user created:', process.env.ADMIN_USERNAME, { duration: `${Date.now() - startTime}ms` });
     } else {
-      console.log('Admin user already exists, skipping creation');
+      console.log('Admin user already exists, skipping creation', { duration: `${Date.now() - startTime}ms` });
     }
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Error initializing admin:`, err);
+    console.error(`[${new Date().toISOString()}] Error initializing admin:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
     throw err;
   }
 }
 
 // Global Error Handling
 app.use((err, req, res, next) => {
-  console.error(`[${new Date().toISOString()}] Error:`, err.stack);
-  res.status(500).json({
-    success: false,
+  console.error(`[${new Date().toISOString()}] Global error:`, {
+    message: err.message,
+    stack: err.stack,
+    code: err.code,
+    name: err.name,
+    path: req.path,
+    view: err.view || 'N/A',
+  });
+  res.status(500).render('error', {
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : {},
+    error: process.env.NODE_ENV === 'development' ? err : {},
+    messages: req.flash(),
   });
 });
 
@@ -1098,7 +1503,10 @@ app.use((err, req, res, next) => {
       });
     });
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Server startup error:`, err);
+    console.error(`[${new Date().toISOString()}] Server startup error:`, {
+      message: err.message,
+      stack: err.stack,
+    });
     process.exit(1);
   }
 })();

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('partials/head', {title: 'Announcements'}) %>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        .announcement {
+            background: #f9f9f9;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <%- include('partials/header', {user}) %>
+    
+    <main>
+        <div class="container">
+            <% if (messages.success && messages.success.length > 0) { %>
+                <% messages.success.forEach(message => { %>
+                    <div class="alert alert-success"><%= message %></div>
+                <% }) %>
+            <% } %>
+            <% if (messages.error && messages.error.length > 0) { %>
+                <% messages.error.forEach(message => { %>
+                    <div class="alert alert-danger"><%= message %></div>
+                <% }) %>
+            <% } %>
+
+            <h1>Announcements</h1>
+            <% console.log('Announcements:', announcements ? announcements.map(a => ({ id: a._id, title: a.title, createdAt: a.createdAt })) : 'No announcements'); %>
+            <% if (announcements && announcements.length > 0) { %>
+                <% announcements.forEach(announcement => { %>
+                    <div class="announcement">
+                        <h2><%= announcement.title || 'Untitled' %></h2>
+                        <p><%= announcement.content || 'No content available' %></p>
+                        <p><small>Posted on <%= announcement.createdAt ? announcement.createdAt.toLocaleDateString() : 'Unknown date' %></small></p>
+                    </div>
+                <% }) %>
+            <% } else { %>
+                <p>No announcements available.</p>
+            <% } %>
+        </div>
+    </main>
+
+    <%- include('partials/footer') %>
+    <script src="/js/main.js"></script>
+</body>
+</html>

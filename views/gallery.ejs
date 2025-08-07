@@ -70,15 +70,12 @@
             <% } %>
 
             <h1>Photo Gallery</h1>
-            <div class="gallery">
-<<<<<<< HEAD
-                <% if (
-=======
-                <% console.log('Photos:', photos); %>
-                <% if (photos && photos.length > 0) { %>
+            <% console.log('Photos:', photos ? photos.map(p => ({ id: p._id, title: p.title, imageUrl: p.imageUrl ? p.imageUrl.substring(0, 50) + '...' : null })) : 'No photos'); %>
+            <% if (photos && photos.length > 0) { %>
+                <div class="gallery">
                     <% photos.forEach(photo => { %>
                         <div class="gallery-item">
-                            <img src="<%= photo.imageUrl %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.style.display='none';console.error('Failed to load photo: <%= photo.imageUrl %>')">
+                            <img src="<%= photo.imageUrl || '/images/placeholder.jpg' %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.src='/images/placeholder.jpg';console.error('Failed to load photo: <%= photo.imageUrl %>')">
                             <div class="overlay">
                                 <h3><%= photo.title || 'Untitled' %></h3>
                                 <% if (photo.description) { %>
@@ -87,10 +84,10 @@
                             </div>
                         </div>
                     <% }) %>
-                <% } else { %>
-                    <p>No photos available.</p>
-                <% } %>
-            </div>
+                </div>
+            <% } else { %>
+                <p>No photos available.</p>
+            <% } %>
         </div>
     </main>
 
@@ -98,4 +95,3 @@
     <script src="/js/main.js"></script>
 </body>
 </html>
->>>>>>> c4d967a35d52e7950d0ac4be0937f041dcf5529c
