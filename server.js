@@ -27,28 +27,19 @@ requiredEnvVars.forEach((varName) => {
   }
 });
 
-console.log('Loaded ADMIN_USERNAME:', process.env.ADMIN_USERNAME);
-console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
-console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
-console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
-console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Set' : 'Not set');
-console.log('B2_KEY_ID:', process.env.B2_KEY_ID ? 'Set' : 'Not set');
-console.log('B2_APPLICATION_KEY:', process.env.B2_APPLICATION_KEY ? 'Set' : 'Not set');
-console.log('B2_ENDPOINT:', process.env.B2_ENDPOINT);
-console.log('B2_BUCKET_NAME:', process.env.B2_BUCKET_NAME);
+console.log(`[${new Date().toISOString()}] Loaded ADMIN_USERNAME: ${process.env.ADMIN_USERNAME}`);
+console.log(`[${new Date().toISOString()}] ADMIN_PASSWORD: ${process.env.ADMIN_PASSWORD ? 'Set' : 'Not set'}`);
+console.log(`[${new Date().toISOString()}] ADMIN_EMAIL: ${process.env.ADMIN_EMAIL}`);
+console.log(`[${new Date().toISOString()}] MONGODB_URI: ${process.env.MONGODB_URI ? 'Set' : 'Not set'}`);
+console.log(`[${new Date().toISOString()}] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`[${new Date().toISOString()}] SESSION_SECRET: ${process.env.SESSION_SECRET ? 'Set' : 'Not set'}`);
+console.log(`[${new Date().toISOString()}] B2_KEY_ID: ${process.env.B2_KEY_ID ? 'Set' : 'Not set'}`);
+console.log(`[${new Date().toISOString()}] B2_APPLICATION_KEY: ${process.env.B2_APPLICATION_KEY ? 'Set' : 'Not set'}`);
+console.log(`[${new Date().toISOString()}] B2_ENDPOINT: ${process.env.B2_ENDPOINT}`);
+console.log(`[${new Date().toISOString()}] B2_BUCKET_NAME: ${process.env.B2_BUCKET_NAME}`);
 
-// HTTPS redirection for production
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-  app.use((req, res, next) => {
-    if (req.header('x-forwarded-proto') !== 'https') {
-      console.log(`[${new Date().toISOString()}] Redirecting HTTP to HTTPS: ${req.url}`);
-      return res.redirect(`https://${req.header('host')}${req.url}`);
-    }
-    next();
-  });
-}
+// Trust Render's proxy
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cookieParser());
@@ -61,7 +52,7 @@ app.use(methodOverride('_method'));
 const sessionStore = MongoStore.create({
   mongoUrl: process.env.MONGODB_URI,
   collectionName: 'sessions',
-  ttl: 14 * 24 * 60 * 60,
+  ttl: 24 * 60 * 60, // 24 hours
   autoRemove: 'native',
 });
 
@@ -75,6 +66,7 @@ sessionStore.on('connected', () => {
 
 app.use(
   session({
+    name: 'connect.sid',
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -205,7 +197,7 @@ const connectDB = async () => {
         console.error(`[${new Date().toISOString()}] MongoDB connection failed after retries, exiting...`);
         process.exit(1);
       }
-      console.log(`Retrying connection (${retries} attempts left)...`);
+      console.log(`[${new Date().toISOString()}] Retrying connection (${retries} attempts left)...`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
@@ -253,21 +245,12 @@ function ensureAuthenticated(req, res, next) {
     path: req.path,
   });
   if (req.session.user && req.session.user.role === 'admin') {
-    req.session.touch(); // Extend session expiry
+    req.session.touch();
     console.log(`[${new Date().toISOString()}] Session valid, proceeding`);
     return next();
   }
-  console.log(`[${new Date().toISOString()}] Session invalid, destroying session`);
-  req.session.destroy((err) => {
-    if (err) console.error(`[${new Date().toISOString()}] Session destroy error:`, err);
-    res.clearCookie('connect.sid', {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    });
-    res.redirect('/admin/login');
-  });
+  console.log(`[${new Date().toISOString()}] Session invalid, redirecting to login`);
+  res.redirect('/admin/login');
 }
 
 // Session Verification Middleware
@@ -275,31 +258,21 @@ app.use('/admin/*', (req, res, next) => {
   if (req.path === '/admin/login' || req.path.startsWith('/admin/assets/')) {
     return next();
   }
-  if (!req.sessionID || !req.cookies || !req.cookies['connect.sid']) {
-    console.log(`[${new Date().toISOString()}] No session ID or connect.sid cookie, redirecting to login`);
+  console.log(`[${new Date().toISOString()}] Session verification:`, {
+    sessionID: req.sessionID,
+    cookie: req.cookies['connect.sid'] || 'none',
+    path: req.path,
+  });
+  if (!req.sessionID || !req.cookies['connect.sid']) {
+    console.log(`[${new Date().toISOString()}] No session ID or cookie, redirecting to login`);
     return res.redirect('/admin/login');
   }
   sessionStore.get(req.sessionID, (err, session) => {
-    console.log(`[${new Date().toISOString()}] Session store check:`, {
-      sessionID: req.sessionID,
-      sessionExists: !!session,
-      error: err,
-      cookies: req.cookies,
-    });
     if (err || !session) {
-      console.log(`[${new Date().toISOString()}] Session not found in store, redirecting to login`);
-      req.session.destroy((destroyErr) => {
-        if (destroyErr) console.error(`[${new Date().toISOString()}] Session destroy error:`, destroyErr);
-        res.clearCookie('connect.sid', {
-          path: '/',
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        });
-        res.redirect('/admin/login');
-      });
+      console.error(`[${new Date().toISOString()}] Session not found in store:`, err || 'No session data');
+      res.redirect('/admin/login');
     } else {
-      console.log(`[${new Date().toISOString()}] Session found:`, session);
+      console.log(`[${new Date().toISOString()}] Session found in store:`, session);
       next();
     }
   });
@@ -379,23 +352,8 @@ app.get('/announcements', async (req, res) => {
     const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
     console.log(`[${new Date().toISOString()}] Fetched public announcements:`, {
       count: announcements.length,
-      sample: announcements.length > 0 ? {
-        id: announcements[0]._id,
-        title: announcements[0].title,
-        content: announcements[0].content ? announcements[0].content.substring(0, 50) + '...' : null,
-        isActive: announcements[0].isActive,
-        createdAt: announcements[0].createdAt,
-      } : null,
       duration: `${Date.now() - startTime}ms`,
     });
-    // Validate announcement data
-    const invalidAnnouncements = announcements.filter(a => !a.title || !a.content || !a.createdAt);
-    if (invalidAnnouncements.length > 0) {
-      console.warn(`[${new Date().toISOString()}] Invalid announcements detected:`, {
-        count: invalidAnnouncements.length,
-        ids: invalidAnnouncements.map(a => a._id),
-      });
-    }
     res.render('announcements', {
       announcements: announcements || [],
       user: req.session.user,
@@ -405,8 +363,6 @@ app.get('/announcements', async (req, res) => {
     console.error(`[${new Date().toISOString()}] Public announcements error:`, {
       message: err.message,
       stack: err.stack,
-      name: err.name,
-      view: err.view || 'N/A',
       duration: `${Date.now() - startTime}ms`,
     });
     req.flash('error', `Failed to load announcements: ${err.message}`);
@@ -427,21 +383,8 @@ app.get('/gallery', async (req, res) => {
     const photos = await Photo.find().sort({ createdAt: -1 });
     console.log(`[${new Date().toISOString()}] Fetched gallery photos:`, {
       photoCount: photos.length,
-      sample: photos.length > 0 ? {
-        title: photos[0].title,
-        imageUrl: photos[0].imageUrl ? photos[0].imageUrl.substring(0, 50) + '...' : null,
-        createdAt: photos[0].createdAt,
-      } : null,
       duration: `${Date.now() - startTime}ms`,
     });
-    // Validate photo URLs
-    const invalidPhotos = photos.filter(photo => !photo.imageUrl || typeof photo.imageUrl !== 'string');
-    if (invalidPhotos.length > 0) {
-      console.warn(`[${new Date().toISOString()}] Invalid photo URLs detected:`, {
-        count: invalidPhotos.length,
-        ids: invalidPhotos.map(p => p._id),
-      });
-    }
     res.render('gallery', {
       photos: photos || [],
       user: req.session.user,
@@ -451,7 +394,6 @@ app.get('/gallery', async (req, res) => {
     console.error(`[${new Date().toISOString()}] Gallery error:`, {
       message: err.message,
       stack: err.stack,
-      name: err.name,
       duration: `${Date.now() - startTime}ms`,
     });
     req.flash('error', `Failed to load gallery: ${err.message}`);
@@ -521,11 +463,7 @@ app.post('/admin/login', async (req, res) => {
       console.log(`[${new Date().toISOString()}] User not found:`, username);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
-      req.session.save((err) => {
-        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
-        res.redirect('/admin/login');
-      });
-      return;
+      return res.redirect('/admin/login');
     }
 
     const isMatch = await admin.comparePassword(password);
@@ -534,11 +472,7 @@ app.post('/admin/login', async (req, res) => {
       console.log(`[${new Date().toISOString()}] Password mismatch for user:`, username);
       req.flash('error', 'Invalid credentials');
       req.flash('username', username);
-      req.session.save((err) => {
-        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
-        res.redirect('/admin/login');
-      });
-      return;
+      return res.redirect('/admin/login');
     }
 
     req.session.user = {
@@ -584,23 +518,13 @@ app.post('/admin/login', async (req, res) => {
       duration: `${Date.now() - startTime}ms`,
     });
     req.flash('error', 'An error occurred during login');
-    req.session.save((err) => {
-      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
-      res.redirect('/admin/login');
-    });
+    res.redirect('/admin/login');
   }
 });
 
 // Admin Logout Route
 app.get('/admin/logout', (req, res) => {
   const user = req.session.user ? { ...req.session.user } : null;
-
-  const safeRedirect = (url) => {
-    res.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.header('Pragma', 'no-cache');
-    res.header('Expires', '0');
-    res.status(302).location(url).end();
-  };
 
   req.session.destroy((err) => {
     if (err) {
@@ -618,7 +542,7 @@ app.get('/admin/logout', (req, res) => {
       console.log(`[${new Date().toISOString()}] Admin ${user.username} logged out`);
     }
 
-    safeRedirect('/admin/login?logout=success');
+    res.redirect('/admin/login?logout=success');
   });
 });
 
@@ -987,7 +911,6 @@ app.put('/admin/photos/:id', ensureAuthenticated, uploadImage.single('image'), a
     req.flash('success', 'Photo updated successfully');
     req.session.save((err) => {
       if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.redirect('/admin/photos');
     });
   } catch (err) {
@@ -1449,10 +1372,6 @@ async function initializeAdmin() {
   const startTime = Date.now();
   try {
     console.log(`[${new Date().toISOString()}] Checking admin user...`);
-    console.log(`[${new Date().toISOString()}] ADMIN_USERNAME:`, process.env.ADMIN_USERNAME);
-    console.log(`[${new Date().toISOString()}] ADMIN_PASSWORD:`, process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
-    console.log(`[${new Date().toISOString()}] ADMIN_EMAIL:`, process.env.ADMIN_EMAIL);
-
     const adminCount = await Admin.countDocuments();
     if (adminCount === 0) {
       if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_EMAIL) {
@@ -1488,7 +1407,6 @@ app.use((err, req, res, next) => {
     code: err.code,
     name: err.name,
     path: req.path,
-    view: err.view || 'N/A',
   });
   res.status(500).render('error', {
     message: 'Something went wrong!',
