@@ -179,9 +179,6 @@ const connectDB = async () => {
       // Ensure indexes for Video and Photo collections
       await mongoose.model('Video').createIndexes();
       await mongoose.model('Photo').createIndexes();
-      // Clear sessions collection on startup
-      await mongoose.connection.collection('sessions').deleteMany({});
-      console.log(`[${new Date().toISOString()}] Cleared sessions collection on startup`);
       return;
     } catch (err) {
       console.error(`[${new Date().toISOString()}] MongoDB connection error:`, {
@@ -235,7 +232,7 @@ app.use((req, res, next) => {
 
 // Authentication middleware
 function ensureAuthenticated(req, res, next) {
-  console.log('Checking session:', {
+  console.log(`[${new Date().toISOString()}] Checking session:`, {
     sessionID: req.sessionID,
     user: req.session.user,
     cookies: req.cookies || 'No cookies',
@@ -243,10 +240,13 @@ function ensureAuthenticated(req, res, next) {
   });
   if (req.session.user && req.session.user.role === 'admin') {
     req.session.touch();
-    console.log('Session valid, proceeding to next middleware');
+    console.log(`[${new Date().toISOString()}] Session valid, proceeding to next middleware`);
     return next();
   }
-  console.log('Session invalid, destroying session');
+  console.log(`[${new Date().toISOString()}] Session invalid, destroying session`, {
+    sessionID: req.sessionID,
+    user: req.session.user,
+  });
   req.session.destroy((err) => {
     if (err) console.error(`[${new Date().toISOString()}] Session destroy error:`, err);
     res.clearCookie('connect.sid', {
@@ -501,8 +501,9 @@ app.post('/admin/login', async (req, res) => {
       username: admin.username,
       role: 'admin',
     };
-    console.log(`[${new Date().toISOString()}] Session created:`, req.session.user, {
+    console.log(`[${new Date().toISOString()}] Session created:`, {
       sessionID: req.sessionID,
+      user: req.session.user,
       duration: `${Date.now() - startTime}ms`,
     });
 
@@ -519,7 +520,11 @@ app.post('/admin/login', async (req, res) => {
           req.flash('error', 'Session storage failed');
           return res.redirect('/admin/login');
         }
-        console.log(`[${new Date().toISOString()}] Session verified in store:`, session);
+        console.log(`[${new Date().toISOString()}] Session verified in store:`, {
+          sessionID: req.sessionID,
+          user: session.user,
+          expires: session.cookie.expires,
+        });
         req.flash('success', 'Logged in successfully');
         res.redirect('/admin/dashboard');
       });
