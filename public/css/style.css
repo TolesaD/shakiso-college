@@ -43,11 +43,7 @@ header {
     color: var(--white);
     padding: 1rem 0;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    position: fixed; /* Fix header to top */
-    top: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
+    position: relative;
 }
 
 .navbar {
@@ -69,7 +65,7 @@ header {
 .nav-links {
     display: flex;
     list-style: none;
-    margin-left: auto;
+    margin-left: auto; /* Aligns to the right */
 }
 
 .nav-links li {
@@ -90,35 +86,11 @@ header {
 .hamburger {
     display: none;
     cursor: pointer;
-    width: 30px;
-    height: 20px;
-    position: relative;
+    font-size: 1.8rem;
+    color: var(--white);
     z-index: 1002;
-    pointer-events: auto !important;
+    pointer-events: auto;
     touch-action: manipulation;
-    visibility: visible !important;
-    background: transparent;
-}
-
-.hamburger span {
-    background: var(--white);
-    display: block !important;
-    height: 3px;
-    margin-bottom: 5px;
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translate(5px, 5px);
-}
-
-.hamburger.active span:nth-child(2) {
-    opacity: 0;
-}
-
-.hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translate(7px, -7px);
 }
 
 .nav-overlay {
@@ -129,14 +101,14 @@ header {
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     z-index: 999;
-    display: none !important;
+    display: none;
     opacity: 0;
     transition: opacity 0.3s ease-in-out;
     pointer-events: none;
 }
 
 .nav-overlay.active {
-    display: block !important;
+    display: block;
     opacity: 1;
     pointer-events: auto;
 }
@@ -147,11 +119,7 @@ header {
     color: var(--white);
     padding: 1rem 0;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
+    position: relative;
 }
 
 .admin-nav {
@@ -163,7 +131,6 @@ header {
 .admin-nav-links {
     display: flex;
     list-style: none;
-    margin-left: auto;
 }
 
 .admin-nav-links li {
@@ -184,35 +151,11 @@ header {
 .admin-hamburger {
     display: none;
     cursor: pointer;
-    width: 30px;
-    height: 20px;
-    position: relative;
+    font-size: 1.8rem;
+    color: var(--white);
     z-index: 1002;
-    pointer-events: auto !important;
+    pointer-events: auto;
     touch-action: manipulation;
-    visibility: visible !important;
-    background: transparent;
-}
-
-.admin-hamburger span {
-    background: var(--white);
-    display: block !important;
-    height: 3px;
-    margin-bottom: 5px;
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.admin-hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translate(5px, 5px);
-}
-
-.admin-hamburger.active span:nth-child(2) {
-    opacity: 0;
-}
-
-.admin-hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translate(7px, -7px);
 }
 
 .admin-nav-overlay {
@@ -223,14 +166,14 @@ header {
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     z-index: 999;
-    display: none !important;
+    display: none;
     opacity: 0;
     transition: opacity 0.3s ease-in-out;
     pointer-events: none;
 }
 
 .admin-nav-overlay.active {
-    display: block !important;
+    display: block;
     opacity: 1;
     pointer-events: auto;
 }
@@ -238,13 +181,13 @@ header {
 /* Responsive */
 @media (max-width: 768px) {
     .nav-links {
-        display: none !important;
+        display: none;
         flex-direction: column;
         position: fixed;
-        top: 60px;
+        top: 70px;
         right: 0;
         width: 250px;
-        height: calc(100vh - 60px);
+        height: 100%;
         background-color: var(--primary-color);
         padding: 1rem;
         z-index: 1001;
@@ -253,28 +196,27 @@ header {
     }
 
     .nav-links.active {
-        display: flex !important;
-        transform: translateX(0) !important;
+        display: flex;
+        transform: translateX(0);
     }
 
     .nav-links li {
-        margin: 1rem 0;
+        margin: 0.5rem 0;
     }
 
     .hamburger {
         display: block !important;
         visibility: visible !important;
-        background: transparent;
     }
 
     .admin-nav-links {
-        display: none !important;
+        display: none;
         flex-direction: column;
         position: fixed;
-        top: 60px;
+        top: 70px;
         right: 0;
         width: 250px;
-        height: calc(100vh - 60px);
+        height: 100%;
         background-color: var(--dark-color);
         padding: 1rem;
         z-index: 1001;
@@ -283,39 +225,34 @@ header {
     }
 
     .admin-nav-links.active {
-        display: flex !important;
-        transform: translateX(0) !important;
+        display: flex;
+        transform: translateX(0);
     }
 
     .admin-nav-links li {
-        margin: 1rem 0;
+        margin: 0.5rem 0;
     }
 
     .admin-hamburger {
         display: block !important;
         visibility: visible !important;
-        background: transparent;
     }
 
     /* Hero for mobile */
     .hero {
-        background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/contain !important;
-        height: 30vh !important; /* Further reduced */
-        background-size: contain !important;
-        padding: 1rem 0 !important;
-        margin-top: 60px; /* Account for fixed header */
+        background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/contain;
+        height: 50vh;
     }
 }
 
 /* Hero Section */
 .hero {
-    background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/cover;
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/college-bg.jpg') no-repeat center center/cover;
     height: 80vh;
     display: flex;
     align-items: center;
     text-align: center;
     color: var(--white);
-    padding: 4rem 0;
 }
 
 .hero-content {
@@ -324,31 +261,29 @@ header {
 }
 
 .hero h1 {
-    font-size: 2.5rem;
+    font-size: 3rem;
     margin-bottom: 1rem;
 }
 
 .hero p {
     font-size: 1.2rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .btn {
     display: inline-block;
-    background: #1a73e8;
+    background: var(--secondary-color);
     color: var(--white);
-    padding: 0.75rem 1.5rem;
+    padding: 0.8rem 1.5rem;
     border: none;
-    border-radius: 4px;
+    border-radius: 5px;
     cursor: pointer;
     font-size: 1rem;
     transition: all 0.3s;
-    text-decoration: none;
-    margin: 0.5rem;
 }
 
 .btn:hover {
-    background: #1557b0;
+    background: #2980b9;
     transform: translateY(-3px);
 }
 
@@ -365,39 +300,39 @@ header {
 
 /* Sections */
 .section {
-    padding: 2rem 0;
+    padding: 5rem 0;
 }
 
 .section-title {
     text-align: center;
-    margin-bottom: 1.5rem;
-    font-size: 1.8rem;
+    margin-bottom: 3rem;
+    font-size: 2.5rem;
     color: var(--primary-color);
 }
 
 /* Highlights */
 .highlights {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
 }
 
 .highlight-card {
     background: var(--white);
-    padding: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    border-radius: 5px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     text-align: center;
     transition: transform 0.3s;
 }
 
 .highlight-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-10px);
 }
 
 .highlight-card i {
-    font-size: 2rem;
-    color: #1a73e8;
+    font-size: 3rem;
+    color: var(--secondary-color);
     margin-bottom: 1rem;
 }
 
@@ -408,20 +343,18 @@ header {
 /* Announcements */
 .announcements {
     background: var(--white);
-    padding: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    border-radius: 5px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
 .announcement-item {
-    padding: 1.5rem;
-    border-bottom: none;
-    margin-bottom: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 1rem 0;
+    border-bottom: 1px solid #eee;
 }
 
 .announcement-item:last-child {
-    margin-bottom: 0;
+    border-bottom: none;
 }
 
 .announcement-item h3 {
@@ -434,7 +367,7 @@ header {
 }
 
 .announcement-item .date {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--dark-gray);
 }
 
@@ -442,7 +375,7 @@ header {
 .photo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
+    gap: 1.5rem;
 }
 
 .photo-card {
@@ -490,9 +423,9 @@ header {
 
 .video-card {
     background: var(--white);
-    border-radius: 8px;
+    border-radius: 5px;
     overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease;
 }
 
@@ -514,7 +447,6 @@ header {
     left: 0;
     width: 100%;
     height: 100%;
-    border: none;
 }
 
 .video-info {
@@ -645,7 +577,6 @@ footer {
 .admin-main {
     min-height: calc(100vh - 120px);
     padding: 2rem 0;
-    margin-top: 60px; /* Account for fixed admin header */
 }
 
 .dashboard-cards {
@@ -724,19 +655,14 @@ footer {
 
 .alert {
     padding: 1rem;
-    margin-bottom: 1rem;
-    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    border-radius: 5px;
 }
 
 .alert-danger {
     background: #f8d7da;
     color: #721c24;
     border: 1px solid #f5c6cb;
-}
-
-.alert-success {
-    background-color: #d4edda;
-    color: #155724;
 }
 
 /* Error Page Styles */
@@ -811,5 +737,4 @@ footer {
 .img-fluid {
     max-width: 100%;
     height: auto;
-    display: block;
 }
