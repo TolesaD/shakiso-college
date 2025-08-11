@@ -96,13 +96,68 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .hero {
+            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/images/hero-bg.jpg');
+            background-size: cover;
+            background-position: center;
+            padding: 4rem 0;
+            color: white;
+            text-align: center;
+        }
+        .hero-content h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        .hero-content p {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background-color: #1a73e8;
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+            margin: 0.5rem;
+        }
+        .btn:hover {
+            background-color: #1557b0;
+        }
+        .section {
+            padding: 2rem 0;
+        }
+        .section-title {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+        .bg-light {
+            background-color: #f8f9fa;
+        }
+        .highlights {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .highlight-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .highlight-card i {
+            font-size: 2rem;
+            color: #1a73e8;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
-    <%- include('partials/header', {user}) %>
+    <%- include('partials/header', {user: typeof user !== 'undefined' ? user : null, currentRoute: 'home'}) %>
     
     <section class="hero">
-        <div class="container">
+        <div class="container mx-auto">
             <div class="hero-content">
                 <h1>Welcome to Shakiso Polytechnic College</h1>
                 <p>Empowering the future through quality technical and vocational training.</p>
@@ -113,15 +168,15 @@
     </section>
 
     <section class="section">
-        <div class="container">
-            <% if (messages.success && messages.success.length > 0) { %>
+        <div class="container mx-auto">
+            <% if (messages && messages.success && messages.success.length > 0) { %>
                 <% messages.success.forEach(message => { %>
-                    <div class="alert alert-success"><%= message %></div>
+                    <div class="alert alert-success"><%- message %></div>
                 <% }) %>
             <% } %>
-            <% if (messages.error && messages.error.length > 0) { %>
+            <% if (messages && messages.error && messages.error.length > 0) { %>
                 <% messages.error.forEach(message => { %>
-                    <div class="alert alert-danger"><%= message %></div>
+                    <div class="alert alert-danger"><%- message %></div>
                 <% }) %>
             <% } %>
 
@@ -130,12 +185,12 @@
                 <div class="highlight-card">
                     <i class="fas fa-graduation-cap"></i>
                     <h3>Quality Education</h3>
-                    <p>We provide hands-on training and quality education to prepare trainees for the workforce.</p>
+                    <p>We provide hands-on and quality training to prepare trainees for the workforce.</p>
                 </div>
                 <div class="highlight-card">
                     <i class="fas fa-flask"></i>
                     <h3>Modern Labs</h3>
-                    <p>State-of-the-art laboratory equipped with the latest technology for practical learning.</p>
+                    <p>State-of-the-art lab equipped with the latest technology for practical learning.</p>
                 </div>
                 <div class="highlight-card">
                     <i class="fas fa-chalkboard-teacher"></i>
@@ -147,16 +202,22 @@
     </section>
 
     <section class="section bg-light">
-        <div class="container">
+        <div class="container mx-auto">
             <h2 class="section-title">Latest Announcements</h2>
             <div class="announcements">
                 <% console.log('Announcements:', announcements); %>
                 <% if (announcements && announcements.length > 0) { %>
                     <% announcements.forEach(announcement => { %>
                         <div class="announcement-item">
-                            <h3><%= announcement.title %></h3>
-                            <p><%= announcement.content %></p>
-                            <span class="date"><%= announcement.createdAt.toLocaleDateString() %></span>
+                            <h3><%- announcement.title || 'Untitled' %></h3>
+                            <p><%- announcement.content || 'No content' %></p>
+                            <span class="date">
+                                <% if (announcement.createdAt && !isNaN(new Date(announcement.createdAt))) { %>
+                                    <%- new Date(announcement.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %>
+                                <% } else { %>
+                                    Date not available
+                                <% } %>
+                            </span>
                         </div>
                     <% }) %>
                 <% } else { %>
@@ -168,7 +229,39 @@
     </section>
 
     <section class="section">
-        <div class="container">
+        <div class="container mx-auto">
+            <h2 class="section-title">Video Gallery</h2>
+            <div class="video-grid">
+                <% console.log('Videos:', videos); %>
+                <% if (videos && videos.length > 0) { %>
+                    <% videos.forEach(video => { %>
+                        <div class="video-card">
+                            <div class="video-container">
+                                <% if (video.source === 'youtube') { %>
+                                    <iframe src="<%- video.videoUrl.replace('watch?v=', 'embed/') %>" allowfullscreen></iframe>
+                                <% } else { %>
+                                    <video controls>
+                                        <source src="<%- video.videoUrl %>" type="<%- video.mimeType || 'video/mp4' %>">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                <% } %>
+                            </div>
+                            <div class="video-info">
+                                <h3><%- video.title || 'Untitled' %></h3>
+                                <p><%- video.description || 'No description' %></p>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No videos available.</p>
+                <% } %>
+            </div>
+            <a href="/videos" class="btn">View All Videos</a>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container mx-auto">
             <h2 class="section-title">Photo Gallery</h2>
             <div class="photo-grid">
                 <% console.log('Photos:', photos); %>
@@ -176,13 +269,11 @@
                     <% photos.forEach(photo => { %>
                         <div class="photo-card">
                             <div class="photo-container">
-                                <img src="<%= photo.imageUrl || '/images/placeholder.jpg' %>" alt="<%= photo.title || 'Photo' %>" class="img-fluid" onerror="this.src='/images/placeholder.jpg';console.error('Failed to load photo: <%= photo.imageUrl %>')">
+                                <img src="<%- photo.imageUrl || '/images/logo.png' %>" alt="<%- photo.title || 'Photo' %>" class="img-fluid">
                             </div>
                             <div class="photo-info">
-                                <h3><%= photo.title || 'Untitled' %></h3>
-                                <% if (photo.description) { %>
-                                    <p><%= photo.description %></p>
-                                <% } %>
+                                <h3><%- photo.title || 'Untitled' %></h3>
+                                <p><%- photo.description || 'No description' %></p>
                             </div>
                         </div>
                     <% }) %>
@@ -194,43 +285,6 @@
         </div>
     </section>
 
-    <section class="section bg-light">
-        <div class="container">
-            <h2 class="section-title">Latest Videos</h2>
-            <div class="video-grid">
-                <% console.log('Videos:', videos); %>
-                <% if (videos && videos.length > 0) { %>
-                    <% videos.forEach(video => { %>
-                        <div class="video-card">
-                            <div class="video-container">
-                                <% if (video.source === 'youtube') { %>
-                                    <iframe src="<%= video.videoUrl %>" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                                <% } else { %>
-                                    <video controls onerror="console.error('Failed to load video: <%= video.videoUrl %>')">
-                                        <source src="<%= video.videoUrl %>" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                <% } %>
-                            </div>
-                            <div class="video-info">
-                                <h3><%= video.title || 'Untitled' %></h3>
-                                <% if (video.description) { %>
-                                    <p><%= video.description %></p>
-                                <% } %>
-                            </div>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <p>No videos available.</p>
-                <% } %>
-            </div>
-            <div class="text-center">
-                <a href="/videos" class="btn">View All Videos</a>
-            </div>
-        </div>
-    </section>
-
     <%- include('partials/footer') %>
-    <script src="/js/main.js"></script>
 </body>
 </html>

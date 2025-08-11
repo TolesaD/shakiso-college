@@ -4,21 +4,8 @@
     <%- include('../partials/head', {title: 'Admin Dashboard'}) %>
 </head>
 <body>
-    <header class="admin-header">
-        <div class="container">
-            <nav class="admin-nav">
-                <a href="/admin/dashboard" class="logo">Admin <span>Dashboard</span></a>
-                <ul class="admin-nav-links">
-                    <li><a href="/admin/dashboard">Dashboard</a></li>
-                    <li><a href="/admin/announcements">Announcements</a></li>
-                    <li><a href="/admin/photos">Photos</a></li>
-                    <li><a href="/admin/videos">Videos</a></li>
-                    <li><a href="/admin/logout">Logout</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
-
+    <%- include('../partials/admin-header', {user, currentRoute: 'dashboard'}) %>
+    
     <main class="admin-main">
         <div class="container">
             <h1>Welcome, <%= user.username %></h1>

@@ -1,0 +1,18 @@
+<header class="admin-header">
+    <div class="container">
+        <nav class="admin-nav">
+            <a href="/admin/dashboard" class="logo">Shakiso <span>Polytechnic Admin</span></a>
+            <div class="admin-hamburger" id="admin-hamburger">
+                <i class="fas fa-bars"></i>
+            </div>
+            <ul class="admin-nav-links" id="admin-nav-links">
+                <li><a href="/" class="<%= currentRoute === 'home' ? 'active' : '' %>">Home</a></li>
+                <li><a href="/admin/dashboard" class="<%= currentRoute === 'dashboard' ? 'active' : '' %>">Dashboard</a></li>
+                <li><a href="/admin/announcements" class="<%= currentRoute === 'announcements' ? 'active' : '' %>">Announcements</a></li>
+                <li><a href="/admin/photos" class="<%= currentRoute === 'photos' ? 'active' : '' %>">Photos</a></li>
+                <li><a href="/admin/videos" class="<%= currentRoute === 'videos' ? 'active' : '' %>">Videos</a></li>
+                <li><a href="/admin/logout">Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>

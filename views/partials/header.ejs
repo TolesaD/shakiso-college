@@ -1,18 +1,25 @@
 <header>
-    <div class="container">
-        <nav class="navbar">
-            <a href="/" class="logo">Shakiso <span>Polytechnic</span></a>
-            <div class="hamburger">
-                <i class="fas fa-bars"></i>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">Shakiso Polytechnic</a>
+            <div class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
-            <ul class="nav-links">
-                <li><a href="/">Home</a></li>
-                <li><a href="/about">About</a></li>
-                <li><a href="/gallery">Gallery</a></li>
-                <li><a href="/videos">Videos</a></li>
-                <li><a href="/contact">Contact</a></li>
-                <!-- No auth links here at all -->
+            <ul class="nav-links" id="nav-links">
+                <li><a href="/" class="<%- currentRoute === 'home' ? 'active' : '' %>">Home</a></li>
+                <li><a href="/about" class="<%- currentRoute === 'about' ? 'active' : '' %>">About</a></li>
+                <li><a href="/announcements" class="<%- currentRoute === 'announcements' ? 'active' : '' %>">Announcements</a></li>
+                <li><a href="/gallery" class="<%- currentRoute === 'gallery' ? 'active' : '' %>">Gallery</a></li>
+                <li><a href="/videos" class="<%- currentRoute === 'videos' ? 'active' : '' %>">Videos</a></li>
+                <li><a href="/contact" class="<%- currentRoute === 'contact' ? 'active' : '' %>">Contact</a></li>
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <li><a href="/admin/dashboard">Dashboard</a></li>
+                    <li><a href="/admin/logout">Logout</a></li>
+                <% } %>
             </ul>
-        </nav>
-    </div>
+            <div class="nav-overlay" id="nav-overlay"></div>
+        </div>
+    </nav>
 </header>
