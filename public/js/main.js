@@ -10,8 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback CSS
         hamburger.style.cssText = `
             display: none; cursor: pointer; width: 30px; height: 20px;
-            position: relative; z-index: 1002; pointer-events: auto !important;
-            visibility: visible !important; background: transparent;
+            position: relative; z-index: 1002; pointer-events: auto;
+            visibility: visible; background: transparent;
         `;
         hamburger.querySelectorAll('span').forEach(span => {
             span.style.cssText = `
@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 navOverlay.classList.toggle('active', isActive);
                 document.body.style.overflow = isActive ? 'hidden' : '';
 
+                // Apply mobile styles
                 if (isActive) {
                     navLinks.style.cssText = `
                         display: flex !important; flex-direction: column;
@@ -73,23 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         hamburger.addEventListener('click', (e) => {
-            console.log(`[${timestamp()}] Public hamburger clicked at position: (${e.clientX}, ${e.clientY})`);
-            togglePublicMenu();
-        });
-
-        hamburger.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            console.log(`[${timestamp()}] Public hamburger touched at position: (${e.touches[0].clientX}, ${e.touches[0].clientY})`);
+            console.log(`[${timestamp()}] Hamburger clicked at position: (${e.clientX}, ${e.clientY})`);
             togglePublicMenu();
         });
 
         navOverlay.addEventListener('click', () => {
             console.log(`[${timestamp()}] Public nav overlay clicked`);
-            togglePublicMenu();
-        });
-
-        navOverlay.addEventListener('touchstart', () => {
-            console.log(`[${timestamp()}] Public nav overlay touched`);
             togglePublicMenu();
         });
 
@@ -102,14 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        console.log(`[${timestamp()}] Public hamburger visibility:`, window.getComputedStyle(hamburger).display);
+        // Log initial visibility
+        console.log(`[${timestamp()}] Hamburger visibility:`, window.getComputedStyle(hamburger).display);
         hamburger.querySelectorAll('span').forEach((span, index) => {
-            console.log(`[${timestamp()}] Public hamburger span ${index + 1} visibility:`, window.getComputedStyle(span).display);
+            console.log(`[${timestamp()}] Hamburger span ${index + 1} visibility:`, window.getComputedStyle(span).display);
         });
 
+        // Ensure hamburger visibility on mobile
         if (window.innerWidth <= 768) {
             hamburger.style.display = 'block';
-            console.log(`[${timestamp()}] Public hamburger set to display: block for mobile`);
+            console.log(`[${timestamp()}] Hamburger set to display: block for mobile`);
         }
     } else {
         console.error(`[${timestamp()}] Public hamburger or nav-links not found`, {
@@ -128,15 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback CSS
         adminHamburger.style.cssText = `
             display: none; cursor: pointer; width: 30px; height: 20px;
-            position: relative; z-index: 1002; pointer-events: auto !important;
-            visibility: visible !important; background: transparent;
-            touch-action: manipulation;
+            position: relative; z-index: 1002; pointer-events: auto;
+            visibility: visible; background: transparent;
         `;
         adminHamburger.querySelectorAll('span').forEach(span => {
             span.style.cssText = `
                 background: #ffffff; display: block !important; height: 3px;
                 margin-bottom: 5px; position: relative;
-                pointer-events: auto !important;
             `;
         });
         adminNavLinks.style.cssText = `
@@ -186,9 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`[${timestamp()}] Admin menu toggled: ${isActive}`);
                 console.log(`[${timestamp()}] admin-nav-links display:`, window.getComputedStyle(adminNavLinks).display);
                 console.log(`[${timestamp()}] admin-nav-overlay display:`, window.getComputedStyle(adminOverlay).display);
-                console.log(`[${timestamp()}] admin-nav-links transform:`, window.getComputedStyle(adminNavLinks).transform);
-                console.log(`[${timestamp()}] admin-hamburger z-index:`, window.getComputedStyle(adminHamburger).zIndex);
-                console.log(`[${timestamp()}] admin-hamburger pointer-events:`, window.getComputedStyle(adminHamburger).pointerEvents);
             } catch (error) {
                 console.error(`[${timestamp()}] Error toggling admin menu:`, error);
             }
@@ -199,25 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAdminMenu();
         });
 
-        adminHamburger.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            console.log(`[${timestamp()}] Admin hamburger touched at position: (${e.touches[0].clientX}, ${e.touches[0].clientY})`);
-            toggleAdminMenu();
-        });
-
-        adminHamburger.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            console.log(`[${timestamp()}] Admin hamburger touch ended at position: (${e.changedTouches[0].clientX}, ${e.changedTouches[0].clientY})`);
-            toggleAdminMenu();
-        });
-
         adminOverlay.addEventListener('click', () => {
             console.log(`[${timestamp()}] Admin nav overlay clicked`);
-            toggleAdminMenu();
-        });
-
-        adminOverlay.addEventListener('touchstart', () => {
-            console.log(`[${timestamp()}] Admin nav overlay touched`);
             toggleAdminMenu();
         });
 
@@ -231,8 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         console.log(`[${timestamp()}] Admin hamburger visibility:`, window.getComputedStyle(adminHamburger).display);
-        console.log(`[${timestamp()}] Admin hamburger z-index:`, window.getComputedStyle(adminHamburger).zIndex);
-        console.log(`[${timestamp()}] Admin hamburger pointer-events:`, window.getComputedStyle(adminHamburger).pointerEvents);
         adminHamburger.querySelectorAll('span').forEach((span, index) => {
             console.log(`[${timestamp()}] Admin hamburger span ${index + 1} visibility:`, window.getComputedStyle(span).display);
         });
@@ -241,13 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
             adminHamburger.style.display = 'block';
             console.log(`[${timestamp()}] Admin hamburger set to display: block for mobile`);
         }
-
-        // Debug touch events
-        adminHamburger.addEventListener('touchmove', (e) => {
-            console.log(`[${timestamp()}] Admin hamburger touchmove at position: (${e.touches[0].clientX}, ${e.touches[0].clientY})`);
-        });
     } else {
-        console.error(`[${timestamp()}] Admin hamburger or nav-links not found`, {
+        console.warn(`[${timestamp()}] Admin hamburger or nav-links not found`, {
             adminHamburger: !!adminHamburger,
             adminNavLinks: !!adminNavLinks,
             adminOverlay: !!adminOverlay,
