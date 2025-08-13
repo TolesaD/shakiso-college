@@ -29,4 +29,9 @@
               # Optional: Add other settings if needed, like:
               # port: 21
               # protocol: ftp
+<<<<<<< HEAD
               # dangerous-clean-slate: true # USE WITH EXTREME CAUTION: Deletes all remote files first
+=======
+              # dangerous-clean-slate: true # USE WITH EXTREME CAUTION: Deletes all remote files first
+    
+>>>>>>> 8f7deb91d7aa2ac403602055f2e0ac86535d3111
