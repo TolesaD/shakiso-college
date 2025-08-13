@@ -18,7 +18,7 @@ jobs:
       # --- IMPORTANT: Replace 'ftp-deploy-action/ftp-deploy@vX.Y.Z' with the correct action ---
       # --- and adjust 'server', 'username', etc. based on the action's specific documentation ---
       - name: Deploy to FTP
-        uses: ftp-deploy-action/ftp-deploy@v2.1.0 # Example: using a specific, known-good action
+        uses: sebastianpopp/ftp-action@v4 # Example: using a specific, known-good action
         with:
           # Mapping your GitHub secrets to the action's expected inputs
           server: ${{ secrets.ftp.yegara.com }}            # Maps your FTP_HOST secret to the action's 'server' input
