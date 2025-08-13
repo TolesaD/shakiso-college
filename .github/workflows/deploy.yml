@@ -17,4 +17,5 @@ jobs:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.myftpuser }}
           password: ${{ secrets.shakiso12345 }}
+          local-dir: './build/'             # Change if your website files are in a subfolder
           server-dir: ${{ secrets.public_html }}  # Change to your Yegara site root if different
