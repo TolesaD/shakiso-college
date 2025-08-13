@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Repository Code
         uses: actions/checkout@v3
       - name: Deploy Website via FTP to Yegara
-        uses: SamKirkland/FTP-Deploy-Action@4.3.5
+        uses: SamKirkland/ftp-deploy-action@v4.3.5
         with:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.myftpuser }}
