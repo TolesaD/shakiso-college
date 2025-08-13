@@ -1,21 +1,25 @@
-name: Deploy Website to Yegara FTP
+    name: Deploy to Yegara via FTP
 
-on:
-  push:
-    branches:
-      - main
+    on:
+      push:
+        branches:
+          - main # Trigger deployment on pushes to the 'main' branch
 
-jobs:
-  ftp-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository Code
-        uses: actions/checkout@v3
-      - name: Deploy Website via FTP to Yegara
-        uses: SamKirkland/ftp-deploy-action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.myftpuser }}
-          password: ${{ secrets.shakiso12345 }}
-          local-dir: './build/'             # Change if your website files are in a subfolder
-          server-dir: ${{ secrets.public_html }}  # Change to your Yegara site root if different
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v3
+
+          - name: Build your website
+            run: npm run build # Or yarn build, or whatever your build command is
+
+          - name: Deploy to FTP
+            uses: peaceiris/actions-ftp@v1.0.7 # This is a popular action for FTP deployment
+            with:
+              host: ${{ secrets.ftp.yegara.com }}
+              username: ${{ secrets.myftpuser }}
+              password: ${{ secrets.shakiso12345 }}
+              remote_dir: ${{ secrets.public_html }}
+              local_dir: ./build # Change this to your actual build directory if it's different
