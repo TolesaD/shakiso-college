@@ -25,7 +25,7 @@
               username: ${{ secrets.myftpuser }}
               password: ${{ secrets.shakiso12345 }}
               local-dir: ./build/                      # IMPORTANT: Your build output directory (e.g., build, dist, public)
-              remote-dir: ${{ secrets./public_html }} # The target directory on your Yegara hosting (e.g., /public_html)
+              remote-dir: ${{ secrets.FTP_REMOTE_PATH }} # The target directory on your Yegara hosting (e.g., /public_html)
               # Optional: Add other settings if needed, like:
               # port: 21
               # protocol: ftp
