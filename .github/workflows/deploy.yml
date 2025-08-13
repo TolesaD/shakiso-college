@@ -16,10 +16,11 @@ jobs:
         run: npm run build # Or your build command
 
       - name: Deploy to FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5 # Replace with the correct version
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5 # Replace with the correct action and version
         with:
-          host: ${{ secrets.ftp.yegara.com }}
+          server: ${{ secrets.ftp.yegara.com }} # Note: changed from 'host'
           username: ${{ secrets.myftpuser }}
           password: ${{ secrets.shakiso12345 }}
-          remote_dir: ${{ secrets.public_html }}
-          local_dir: ./build # Make sure this is your actual build directory
+          port: 21 # Add this if the FTP action requires a port. Often it is 21
+          local-dir: ./build # Make sure this path is correct.
+          server-dir: ${{ secrets.public_html }} # Note: changed from 'remote_dir'
