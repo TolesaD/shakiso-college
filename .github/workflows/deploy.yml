@@ -1,31 +1,33 @@
-name: Deploy to Yegara via FTP
+    name: Deploy to Yegara via FTP
 
-on:
-  push:
-    branches:
-      - main
+    on:
+      push:
+        branches:
+          - main # Trigger deployment on pushes to the 'main' branch
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v3
 
-      - name: Build your website
-        run: npm run build # Or your build command
+          - name: Build your website
+            # Make sure this command is correct for your project (e.g., npm run build, yarn build)
+            run: npm run build 
 
-      # --- IMPORTANT: Replace 'ftp-deploy-action/ftp-deploy@vX.Y.Z' with the correct action ---
-      # --- and adjust 'server', 'username', etc. based on the action's specific documentation ---
-      - name: Deploy to FTP
-        uses: sebastianpopp/ftp-action@v4 # Example: using a specific, known-good action
-        with:
-          # Mapping your GitHub secrets to the action's expected inputs
-          server: ${{ secrets.ftp.yegara.com }}            # Maps your FTP_HOST secret to the action's 'server' input
-          username: ${{ secrets.myftpuser }}
-          password: ${{ secrets.shakiso12345 }}
-          port: 21                                  # Standard FTP port, add if needed by the action
-          local-dir: ./build                        # Your local build output directory
-          server-dir: ${{ secrets.public_html }} # The directory on the FTP server
-          # You might need to add other inputs based on the action's docs, like 'protocol' (ftp/sftp)
-          # protocol: ftp # Example if needed
+          - name: Deploy to FTP with SamKirkland/FTP-Deploy-Action
+            # This is the correct path for the widely used FTP deployment action
+            uses: SamKirkland/FTP-Deploy-Action@v4.3.0 # Using the latest stable version (check its repo for the absolute latest)
+            with:
+              # Input names for SamKirkland/FTP-Deploy-Action
+              server: ${{ secrets.ftp.yegara.com }}             # Your FTP Host (e.g., ftp.yegara.com)
+              username: ${{ secrets.myftpuser }}
+              password: ${{ secrets.shakiso12345 }}
+              local-dir: ./build/                      # IMPORTANT: Your build output directory (e.g., build, dist, public)
+              remote-dir: ${{ secrets./public_html }} # The target directory on your Yegara hosting (e.g., /public_html)
+              # Optional: Add other settings if needed, like:
+              # port: 21
+              # protocol: ftp
+              # dangerous-clean-slate: true # USE WITH EXTREME CAUTION: Deletes all remote files first
+    
