@@ -16,9 +16,9 @@
             # Make sure this command is correct for your project (e.g., npm run build, yarn build)
             run: npm run build 
 
-          - name: Deploy to FTP with sebastianpopp/ftp-action@v4
+          - name: Deploy to FTP with SamKirkland/FTP-Deploy-Action
             # This is the correct path for the widely used FTP deployment action
-            uses: sebastianpopp/ftp-action@v4 # Using the latest stable version (check its repo for the absolute latest)
+            uses: SamKirkland/FTP-Deploy-Action@v4.3.0 # Using the latest stable version (check its repo for the absolute latest)
             with:
               # Input names for SamKirkland/FTP-Deploy-Action
               server: ${{ secrets.ftp.yegara.com }}             # Your FTP Host (e.g., ftp.yegara.com)
