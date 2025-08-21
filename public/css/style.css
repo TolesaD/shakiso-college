@@ -65,7 +65,7 @@ header {
 .nav-links {
     display: flex;
     list-style: none;
-    margin-left: auto; /* Aligns to the right */
+    margin-left: auto;
 }
 
 .nav-links li {
@@ -178,78 +178,11 @@ header {
     pointer-events: auto;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .nav-links {
-        display: none;
-        flex-direction: column;
-        position: fixed;
-        top: 70px;
-        right: 0;
-        width: 250px;
-        height: 100%;
-        background-color: var(--primary-color);
-        padding: 1rem;
-        z-index: 1001;
-        transition: transform 0.3s ease-in-out;
-        transform: translateX(100%);
-    }
-
-    .nav-links.active {
-        display: flex;
-        transform: translateX(0);
-    }
-
-    .nav-links li {
-        margin: 0.5rem 0;
-    }
-
-    .hamburger {
-        display: block !important;
-        visibility: visible !important;
-    }
-
-    .admin-nav-links {
-        display: none;
-        flex-direction: column;
-        position: fixed;
-        top: 70px;
-        right: 0;
-        width: 250px;
-        height: 100%;
-        background-color: var(--dark-color);
-        padding: 1rem;
-        z-index: 1001;
-        transition: transform 0.3s ease-in-out;
-        transform: translateX(100%);
-    }
-
-    .admin-nav-links.active {
-        display: flex;
-        transform: translateX(0);
-    }
-
-    .admin-nav-links li {
-        margin: 0.5rem 0;
-    }
-
-    .admin-hamburger {
-        display: block !important;
-        visibility: visible !important;
-    }
-
-    /* Hero for mobile */
-    .hero {
-        background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-        height: 50vh;
-    }
-}
-
-/* Hero Section */
-/* Hero Section - Updated for circular background */
+/* Hero Section - Responsive Circular Background */
 .hero {
-    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/college-bg.jpg') no-repeat center center;
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
     height: 80vh;
+    min-height: 500px;
     display: flex;
     align-items: center;
     text-align: center;
@@ -258,41 +191,21 @@ header {
     overflow: hidden;
 }
 
-/* Create circular mask for the background */
+/* Circular background for larger screens */
 .hero::before {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 80vmin; /* Adjust this value for size - vmin ensures responsiveness */
-    height: 80vmin;
+    width: 70vmin;
+    height: 70vmin;
     border-radius: 50%;
     background: url('/images/college-bg.jpg') no-repeat center center;
     background-size: cover;
     z-index: -1;
-    border: 8px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-}
-
-@media (max-width: 768px) {
-    .hero::before {
-        width: 60vmin;
-        height: 60vmin;
-        border-width: 4px;
-    }
-}
-
-/* Remove the gradient from the circular part */
-.hero::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
-    z-index: -2;
+    border: 6px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
 }
 
 .hero-content {
@@ -300,6 +213,7 @@ header {
     margin: 0 auto;
     position: relative;
     z-index: 1;
+    padding: 0 20px;
 }
 
 .hero h1 {
@@ -779,4 +693,153 @@ footer {
 .img-fluid {
     max-width: 100%;
     height: auto;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+    .hero::before {
+        width: 60vmin;
+        height: 60vmin;
+    }
+}
+
+@media (max-width: 768px) {
+    .nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 70px;
+        right: 0;
+        width: 250px;
+        height: 100%;
+        background-color: var(--primary-color);
+        padding: 1rem;
+        z-index: 1001;
+        transition: transform 0.3s ease-in-out;
+        transform: translateX(100%);
+    }
+
+    .nav-links.active {
+        display: flex;
+        transform: translateX(0);
+    }
+
+    .nav-links li {
+        margin: 0.5rem 0;
+    }
+
+    .hamburger {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    .admin-nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 70px;
+        right: 0;
+        width: 250px;
+        height: 100%;
+        background-color: var(--dark-color);
+        padding: 1rem;
+        z-index: 1001;
+        transition: transform 0.3s ease-in-out;
+        transform: translateX(100%);
+    }
+
+    .admin-nav-links.active {
+        display: flex;
+        transform: translateX(0);
+    }
+
+    .admin-nav-links li {
+        margin: 0.5rem 0;
+    }
+
+    .admin-hamburger {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    /* Mobile Hero Adjustments */
+    .hero {
+        height: 70vh;
+        min-height: 400px;
+    }
+    
+    .hero::before {
+        width: 50vmin;
+        height: 50vmin;
+        border-width: 4px;
+    }
+    
+    .hero h1 {
+        font-size: 2.2rem !important;
+    }
+    
+    .hero p {
+        font-size: 1.1rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        height: 60vh;
+        min-height: 350px;
+    }
+    
+    .hero::before {
+        width: 45vmin;
+        height: 45vmin;
+        border-width: 3px;
+    }
+    
+    .hero h1 {
+        font-size: 1.8rem !important;
+        margin-bottom: 0.8rem !important;
+    }
+    
+    .hero p {
+        font-size: 1rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+    
+    .btn {
+        padding: 0.7rem 1.2rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Landscape mode for mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+    .hero {
+        height: 100vh;
+        min-height: 300px;
+    }
+    
+    .hero::before {
+        width: 40vmin;
+        height: 40vmin;
+    }
+    
+    .hero-content {
+        padding-top: 2rem;
+    }
+}
+
+/* Very small devices */
+@media (max-width: 320px) {
+    .hero::before {
+        width: 40vmin;
+        height: 40vmin;
+    }
+    
+    .hero h1 {
+        font-size: 1.6rem !important;
+    }
+    
+    .logo {
+        font-size: 1.5rem;
+    }
 }
