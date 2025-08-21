@@ -65,7 +65,7 @@ header {
 .nav-links {
     display: flex;
     list-style: none;
-    margin-left: auto; /* Aligns to the right */
+    margin-left: auto;
 }
 
 .nav-links li {
@@ -181,31 +181,125 @@ header {
 /* Hero Section */
 .hero {
     background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-    border-radius: 50%; /* Circular shape */
-    width: 80vw; /* Span edge-to-edge */
-    max-width: 600px; /* Prevent too large */
-    height: 80vw; /* Maintain circular aspect ratio */
+    border-radius: 50%;
+    width: 80vmin; /* Use vmin for better aspect ratio handling */
+    max-width: 600px;
+    height: 80vmin;
     max-height: 600px;
-    margin: 0 auto; /* Center the section */
+    margin: 2rem auto;
     display: flex;
     align-items: center;
+    justify-content: center;
     text-align: center;
     color: var(--white);
-    overflow: hidden; /* Ensure circular clipping */
+    overflow: hidden;
+    padding: 1rem;
+}
+
+.hero-content {
+    max-width: 90%;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.hero h1 {
+    font-size: clamp(1.5rem, 5vw, 2.5rem); /* Responsive font size */
+    margin-bottom: 0.5rem;
+}
+
+.hero p {
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
+    margin-bottom: 1rem;
+}
+
+.hero .btn {
+    font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+    padding: 0.5rem 1rem;
+    margin: 0.3rem;
 }
 
 /* Responsive Hero */
 @media (max-width: 768px) {
     .hero {
-        background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-        border-radius: 50%;
-        width: 90vw;
+        width: 90vmin;
         max-width: 400px;
-        height: 90vw;
+        height: 90vmin;
         max-height: 400px;
-        margin: 0 auto;
+        margin: 1rem auto;
+        padding: 0.5rem;
     }
 
+    .hero-content {
+        max-width: 95%;
+        padding: 0.5rem;
+    }
+
+    .hero h1 {
+        font-size: clamp(1.2rem, 4vw, 2rem);
+    }
+
+    .hero p {
+        font-size: clamp(0.8rem, 2.5vw, 1rem);
+    }
+
+    .hero .btn {
+        font-size: clamp(0.7rem, 2vw, 0.8rem);
+        padding: 0.4rem 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        width: 95vmin;
+        max-width: 300px;
+        height: 95vmin;
+        max-height: 300px;
+        margin: 0.5rem auto;
+        padding: 0.3rem;
+    }
+
+    .hero-content {
+        max-width: 100%;
+        padding: 0.3rem;
+    }
+
+    .hero h1 {
+        font-size: clamp(1rem, 3.5vw, 1.5rem);
+    }
+
+    .hero p {
+        font-size: clamp(0.7rem, 2vw, 0.9rem);
+    }
+
+    .hero .btn {
+        font-size: clamp(0.6rem, 1.8vw, 0.7rem);
+        padding: 0.3rem 0.6rem;
+    }
+}
+
+@media (min-width: 1200px) {
+    .hero {
+        width: 70vmin;
+        max-width: 700px;
+        height: 70vmin;
+        max-height: 700px;
+    }
+
+    .hero h1 {
+        font-size: clamp(2rem, 6vw, 3rem);
+    }
+
+    .hero p {
+        font-size: clamp(1rem, 4vw, 1.2rem);
+    }
+
+    .hero .btn {
+        font-size: clamp(0.9rem, 3vw, 1rem);
+    }
+}
+
+/* Responsive Navigation */
+@media (max-width: 768px) {
     .nav-links {
         display: none;
         flex-direction: column;
@@ -263,49 +357,6 @@ header {
         display: block !important;
         visibility: visible !important;
     }
-}
-
-.hero-content {
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.hero h1 {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-}
-
-.hero p {
-    font-size: 1.2rem;
-    margin-bottom: 2rem;
-}
-
-.btn {
-    display: inline-block;
-    background: var(--secondary-color);
-    color: var(--white);
-    padding: 0.8rem 1.5rem;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: all 0.3s;
-}
-
-.btn:hover {
-    background: #2980b9;
-    transform: translateY(-3px);
-}
-
-.btn-outline {
-    background: transparent;
-    border: 1px solid var(--white);
-    margin-left: 1rem;
-}
-
-.btn-outline:hover {
-    background: var(--white);
-    color: var(--primary-color);
 }
 
 /* Sections */
@@ -372,8 +423,8 @@ header {
 }
 
 .announcement-item p {
-    color: var(--gray);
-    font-size: 0.9rem;
+    color: var(--dark-color);
+    font-size: 1rem;
 }
 
 .announcement-item .date {
@@ -421,7 +472,8 @@ header {
 }
 
 .photo-info p {
-    color: var(--gray);
+    color: var(--dark-color);
+    font-size: 1rem;
 }
 
 /* Videos */
@@ -469,7 +521,8 @@ header {
 }
 
 .video-info p {
-    color: var(--gray);
+    color: var(--dark-color);
+    font-size: 1rem;
 }
 
 /* Contact */
