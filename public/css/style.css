@@ -180,19 +180,14 @@ header {
 
 /* Responsive */
 @media (max-width: 768px) {
-    .nav-links {
-        display: none;
-        flex-direction: column;
-        position: fixed;
-        top: 70px;
-        right: 0;
-        width: 250px;
-        height: 100%;
-        background-color: var(--primary-color);
-        padding: 1rem;
-        z-index: 1001;
-        transition: transform 0.3s ease-in-out;
-        transform: translateX(100%);
+    .hero {
+        background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
+        border-radius: 50%;
+        width: 90vw;
+        max-width: 400px;
+        height: 90vw;
+        max-height: 400px;
+        margin: 0 auto;
     }
 
     .nav-links.active {
@@ -247,12 +242,18 @@ header {
 
 /* Hero Section */
 .hero {
-    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/college-bg.jpg') no-repeat center center/cover;
-    height: 80vh;
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
+    border-radius: 50%; /* Circular shape */
+    width: 80vw; /* Span edge-to-edge, adjust as needed */
+    max-width: 600px; /* Prevent it from being too large */
+    height: 80vw; /* Maintain circular aspect ratio */
+    max-height: 600px;
+    margin: 0 auto; /* Center the section */
     display: flex;
     align-items: center;
     text-align: center;
     color: var(--white);
+    overflow: hidden; /* Ensure circular clipping */
 }
 
 .hero-content {

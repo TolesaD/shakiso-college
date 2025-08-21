@@ -11,6 +11,7 @@ const methodOverride = require('method-override');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const cron = require('node-cron');
+const nodemailer = require('nodemailer');
 
 // Initialize Express app
 const app = express();
@@ -133,6 +134,15 @@ const uploadVideo = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 // Upload to Backblaze B2 and generate signed URL
 async function uploadToB2(file, folder) {
   const startTime = Date.now();
@@ -179,6 +189,7 @@ const connectDB = async () => {
       await mongoose.model('Video').createIndexes();
       await mongoose.model('Photo').createIndexes();
       await mongoose.model('Announcement').createIndexes();
+      await mongoose.model('Message').createIndexes();
       return;
     } catch (err) {
       console.error(`[${new Date().toISOString()}] MongoDB connection error:`, {
@@ -203,6 +214,7 @@ const Admin = require('./models/Admin');
 const Announcement = require('./models/Announcement');
 const Photo = require('./models/Photo');
 const Video = require('./models/Video');
+const Message = require('./models/Message');
 
 // Initialize admin user
 async function initializeAdmin() {
@@ -379,6 +391,82 @@ app.get('/', async (req, res) => {
   }
 });
 
+// Contact Route
+app.get('/contact', (req, res) => {
+  res.render('contact', {
+    user: req.session.user || null,
+    currentRoute: 'contact',
+    messages: req.flash(),
+    formData: req.session.formData || null,
+  });
+});
+
+app.post('/contact', async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { name, email, subject, message } = req.body;
+    console.log(`[${new Date().toISOString()}] Contact form submitted:`, { name, email, subject, message });
+
+    // Validate form data
+    if (!name || !email || !subject || !message) {
+      console.log(`[${new Date().toISOString()}] Validation failed: Missing fields`);
+      req.flash('error', 'All fields are required');
+      req.session.formData = { name, email, subject, message };
+      req.session.save((err) => {
+        if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+        res.redirect('/contact');
+      });
+      return;
+    }
+
+    // Save to MongoDB
+    const newMessage = new Message({
+      name,
+      email,
+      subject,
+      message,
+      createdAt: new Date(),
+    });
+    await newMessage.save();
+    console.log(`[${new Date().toISOString()}] Saved contact message:`, newMessage.toObject(), { duration: `${Date.now() - startTime}ms` });
+
+    // Send email notification (optional)
+    const mailOptions = {
+      from: email,
+      to: process.env.ADMIN_EMAIL,
+      subject: `Contact Form: ${subject}`,
+      text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\nMessage: ${message}`,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error(`[${new Date().toISOString()}] Email error:`, error);
+      } else {
+        console.log(`[${new Date().toISOString()}] Email sent: ${info.response}`);
+      }
+    });
+
+    req.flash('success', 'Your message has been sent successfully!');
+    delete req.session.formData;
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/contact');
+    });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Contact form error:`, {
+      message: err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`,
+    });
+    req.flash('error', `Failed to send message: ${err.message}`);
+    req.session.formData = req.body;
+    req.session.save((err) => {
+      if (err) console.error(`[${new Date().toISOString()}] Session save error:`, err);
+      res.redirect('/contact');
+    });
+  }
+});
+
 // Admin Route
 app.get('/admin', (req, res) => {
   console.log(`[${new Date().toISOString()}] Accessing /admin:`, {
@@ -398,14 +486,6 @@ app.get('/about', (req, res) => {
   res.render('about', {
     user: req.session.user || null,
     currentRoute: 'about',
-    messages: req.flash(),
-  });
-});
-
-app.get('/contact', (req, res) => {
-  res.render('contact', {
-    user: req.session.user || null,
-    currentRoute: 'contact',
     messages: req.flash(),
   });
 });

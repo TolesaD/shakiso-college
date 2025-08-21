@@ -14,10 +14,6 @@
                 <li><a href="/gallery" class="<%= currentRoute === 'gallery' ? 'active' : '' %>">Gallery</a></li>
                 <li><a href="/videos" class="<%= currentRoute === 'videos' ? 'active' : '' %>">Videos</a></li>
                 <li><a href="/contact" class="<%= currentRoute === 'contact' ? 'active' : '' %>">Contact</a></li>
-                <% if (typeof user !== 'undefined' && user) { %>
-                    <li><a href="/admin/dashboard" class="<%= currentRoute === 'dashboard' ? 'active' : '' %>">Dashboard</a></li>
-                    <li><a href="/admin/logout">Logout</a></li>
-                <% } %>
             </ul>
             <div class="nav-overlay" id="nav-overlay"></div>
         </nav>

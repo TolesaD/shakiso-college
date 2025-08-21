@@ -88,24 +88,49 @@
             color: #2c3e50;
         }
         .hero {
-            background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('../images/contact-bg.jpg');
-            background-size: cover;
-            background-position: center;
-            color: white;
             padding: 5rem 0;
             text-align: center;
+            color: white;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hero-bg {
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('../images/contact-bg.jpg');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 50%;
+            margin: 0 auto;
         }
         .hero-content h1 {
             font-size: 2.5rem;
             margin-bottom: 1rem;
         }
+        @media (max-width: 768px) {
+            .hero {
+                min-height: 200px;
+                padding: 3rem 0;
+            }
+            .hero-bg {
+                width: 150px;
+                height: 150px;
+            }
+            .hero-content h1 {
+                font-size: 1.8rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <%- include('partials/header', {user}) %>
+    <%- include('partials/header', {user, currentRoute: 'contact'}) %>
     
     <section class="hero">
         <div class="container">
+            <div class="hero-bg"></div>
             <div class="hero-content">
                 <h1>Contact Us</h1>
                 <p>Get in touch with Shakiso Poly Technic College. We're here to help!</p>
@@ -115,15 +140,19 @@
 
     <main class="contact-container">
         <!-- Flash Messages -->
-        <% if (messages.error) { %>
-            <div class="alert alert-error">
-                <i class="fas fa-exclamation-circle"></i> <%= messages.error %>
-            </div>
+        <% if (messages && messages.error && messages.error.length > 0) { %>
+            <% messages.error.forEach(message => { %>
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i> <%- message %>
+                </div>
+            <% }) %>
         <% } %>
-        <% if (messages.success) { %>
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle"></i> <%= messages.success %>
-            </div>
+        <% if (messages && messages.success && messages.success.length > 0) { %>
+            <% messages.success.forEach(message => { %>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i> <%- message %>
+                </div>
+            <% }) %>
         <% } %>
 
         <div class="contact-grid">
