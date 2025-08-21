@@ -217,8 +217,8 @@ header {
 
 .hero .btn {
     font-size: clamp(0.8rem, 2.5vw, 0.9rem);
-    padding: 0.5rem 1rem;
-    margin: 0.2rem 0;
+    padding: 0.2rem 1rem;
+    margin: 0.1rem 0;
 }
 
 /* Responsive Hero */
@@ -251,7 +251,7 @@ header {
     .hero .btn {
         font-size: clamp(0.7rem, 2vw, 0.8rem);
         padding: 0.4rem 0.8rem;
-        margin: 0.2rem 0;
+        margin: 0.1rem 0;
     }
 }
 
