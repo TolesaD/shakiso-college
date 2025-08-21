@@ -178,34 +178,8 @@ header {
     pointer-events: auto;
 }
 
-/* Hero Section */
-.hero {
-    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-    border-radius: 50%; /* Circular shape */
-    width: 80vw; /* Span edge-to-edge */
-    max-width: 600px; /* Prevent too large */
-    height: 80vw; /* Maintain circular aspect ratio */
-    max-height: 600px;
-    margin: 0 auto; /* Center the section */
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: var(--white);
-    overflow: hidden; /* Ensure circular clipping */
-}
-
-/* Responsive Hero */
+/* Responsive */
 @media (max-width: 768px) {
-    .hero {
-        background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-        border-radius: 50%;
-        width: 90vw;
-        max-width: 400px;
-        height: 90vw;
-        max-height: 400px;
-        margin: 0 auto;
-    }
-
     .nav-links {
         display: none;
         flex-direction: column;
@@ -263,11 +237,69 @@ header {
         display: block !important;
         visibility: visible !important;
     }
+
+    /* Hero for mobile */
+    .hero {
+        background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/contain;
+        height: 50vh;
+    }
+}
+
+/* Hero Section */
+/* Hero Section - Updated for circular background */
+.hero {
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/college-bg.jpg') no-repeat center center;
+    height: 80vh;
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--white);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Create circular mask for the background */
+.hero::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80vmin; /* Adjust this value for size - vmin ensures responsiveness */
+    height: 80vmin;
+    border-radius: 50%;
+    background: url('/images/college-bg.jpg') no-repeat center center;
+    background-size: cover;
+    z-index: -1;
+    border: 8px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+    .hero::before {
+        width: 60vmin;
+        height: 60vmin;
+        border-width: 4px;
+    }
+}
+
+/* Remove the gradient from the circular part */
+.hero::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
+    z-index: -2;
 }
 
 .hero-content {
     max-width: 800px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
 }
 
 .hero h1 {
