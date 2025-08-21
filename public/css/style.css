@@ -843,3 +843,219 @@ footer {
         font-size: 1.5rem;
     }
 }
+/* Ensure all hero sections have the circular background */
+.hero {
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)) !important;
+    height: 60vh;
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--white);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Circular background for all hero sections */
+.hero::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60vmin;
+    height: 60vmin;
+    border-radius: 50%;
+    background: url('/images/college-bg.jpg') no-repeat center center;
+    background-size: cover;
+    z-index: -1;
+    border: 6px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+.hero-content {
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    padding: 0 20px;
+}
+
+/* Improved Announcement Text Visibility */
+.announcement-item {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.announcement-item h3 {
+    margin-bottom: 0.8rem;
+    font-size: 1.4rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.announcement-item p {
+    color: #555; /* Darker gray for better readability */
+    font-size: 1rem; /* Larger font size */
+    line-height: 1.6;
+    margin-bottom: 0.8rem;
+}
+
+.announcement-item .date {
+    font-size: 0.9rem;
+    color: #777; /* Slightly darker for better contrast */
+    font-weight: 500;
+}
+
+/* Improved Gallery Text Visibility */
+.photo-info {
+    padding: 1.5rem;
+    background: #fafafa;
+}
+
+.photo-info h3 {
+    margin-bottom: 0.8rem;
+    font-size: 1.3rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.photo-info p {
+    color: #555; /* Darker gray */
+    font-size: 1rem; /* Larger font size */
+    line-height: 1.5;
+}
+
+/* Improved Video Text Visibility */
+.video-info {
+    padding: 1.5rem;
+    background: #fafafa;
+}
+
+.video-info h3 {
+    margin-bottom: 0.8rem;
+    font-size: 1.3rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.video-info p {
+    color: #555; /* Darker gray */
+    font-size: 1rem; /* Larger font size */
+    line-height: 1.5;
+}
+
+/* Improved Card Text Visibility */
+.highlight-card {
+    background: var(--white);
+    padding: 2.5rem 2rem;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.highlight-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.highlight-card h3 {
+    margin-bottom: 1rem;
+    font-size: 1.4rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.highlight-card p {
+    color: #555; /* Darker gray */
+    font-size: 1.05rem; /* Slightly larger */
+    line-height: 1.6;
+}
+
+/* Improved Contact Form Text Visibility */
+.contact-card {
+    background: var(--white);
+    padding: 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.contact-card h3 {
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.contact-card p {
+    color: #555; /* Darker gray */
+    font-size: 1.05rem;
+    line-height: 1.5;
+}
+
+/* Mobile responsiveness for improved text */
+@media (max-width: 768px) {
+    .announcement-item h3 {
+        font-size: 1.2rem;
+    }
+    
+    .announcement-item p {
+        font-size: 0.95rem;
+    }
+    
+    .photo-info h3,
+    .video-info h3 {
+        font-size: 1.1rem;
+    }
+    
+    .photo-info p,
+    .video-info p {
+        font-size: 0.95rem;
+    }
+    
+    .highlight-card {
+        padding: 2rem 1.5rem;
+    }
+    
+    .highlight-card h3 {
+        font-size: 1.2rem;
+    }
+    
+    .highlight-card p {
+        font-size: 1rem;
+    }
+}
+/* Mobile responsiveness for hero sections */
+@media (max-width: 768px) {
+    .hero {
+        height: 50vh;
+        min-height: 350px;
+    }
+    
+    .hero::before {
+        width: 45vmin;
+        height: 45vmin;
+    }
+    
+    .hero-content h1 {
+        font-size: 2.2rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        height: 45vh;
+        min-height: 300px;
+    }
+    
+    .hero::before {
+        width: 40vmin;
+        height: 40vmin;
+    }
+    
+    .hero-content h1 {
+        font-size: 1.8rem !important;
+    }
+}
