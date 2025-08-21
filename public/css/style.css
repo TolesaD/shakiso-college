@@ -178,7 +178,23 @@ header {
     pointer-events: auto;
 }
 
-/* Responsive */
+/* Hero Section */
+.hero {
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
+    border-radius: 50%; /* Circular shape */
+    width: 80vw; /* Span edge-to-edge */
+    max-width: 600px; /* Prevent too large */
+    height: 80vw; /* Maintain circular aspect ratio */
+    max-height: 600px;
+    margin: 0 auto; /* Center the section */
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--white);
+    overflow: hidden; /* Ensure circular clipping */
+}
+
+/* Responsive Hero */
 @media (max-width: 768px) {
     .hero {
         background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
@@ -188,6 +204,21 @@ header {
         height: 90vw;
         max-height: 400px;
         margin: 0 auto;
+    }
+
+    .nav-links {
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 70px;
+        right: 0;
+        width: 250px;
+        height: 100%;
+        background-color: var(--primary-color);
+        padding: 1rem;
+        z-index: 1001;
+        transition: transform 0.3s ease-in-out;
+        transform: translateX(100%);
     }
 
     .nav-links.active {
@@ -232,28 +263,6 @@ header {
         display: block !important;
         visibility: visible !important;
     }
-
-    /* Hero for mobile */
-    .hero {
-        background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-        height: 50vh;
-    }
-}
-
-/* Hero Section */
-.hero {
-    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/hero-bg.jpg') no-repeat center center/contain;
-    border-radius: 50%; /* Circular shape */
-    width: 80vw; /* Span edge-to-edge, adjust as needed */
-    max-width: 600px; /* Prevent it from being too large */
-    height: 80vw; /* Maintain circular aspect ratio */
-    max-height: 600px;
-    margin: 0 auto; /* Center the section */
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: var(--white);
-    overflow: hidden; /* Ensure circular clipping */
 }
 
 .hero-content {
