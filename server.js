@@ -250,6 +250,15 @@ async function initializeAdmin() {
   }
 }
 
+// Routes
+const announcementRoutes = require('./routes/announcements');
+const photoRoutes = require('./routes/photos');
+const videoRoutes = require('./routes/videos');
+
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/photos', photoRoutes);
+app.use('/api/videos', videoRoutes);
+
 // Set EJS as view engine
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
